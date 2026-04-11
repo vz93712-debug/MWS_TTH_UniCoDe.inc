@@ -68,7 +68,7 @@ class WikiPageVersionAdmin(admin.ModelAdmin):
     list_filter = ('created_by', 'created_at')
     search_fields = ('page__title', 'comment')
     raw_id_fields = ('page', 'created_by')
-    readonly_fields = ('created_at', 'updated_at')
+    readonly_fields = ('id', 'created_at', 'updated_at')
     list_select_related = ('page', 'created_by')
 
 @admin.register(PageMembership)

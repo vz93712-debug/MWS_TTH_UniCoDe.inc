@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 
 from apps.wiki.models import WikiPage, WikiPageVersion
-from apps.wiki.serializers import (
+from apps.wiki.serializers.serializers_page import (
     WikiPageDetailSerializer, 
     WikiPageUpdateSerializer,
     WikiPageMoveSerializer

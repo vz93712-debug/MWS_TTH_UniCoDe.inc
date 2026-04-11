@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import WikiPage, WikiPageVersion, PageMembership
+from apps.wiki.models import WikiPage, WikiPageVersion, PageMembership
 from apps.spaces.models import Space, SpaceMembership
 
 class WikiPageDetailSerializer(serializers.ModelSerializer):
@@ -71,9 +71,6 @@ class WikiPageUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WikiPage
         fields = ('title', 'description', 'content', 'yjs_state', 'create_version', 'version_comment')
-        extra_kwargs = {
-            'yjs_state': {'write_only': True} 
-        }
 
     def update(self, instance, validated_data):
         create_version = validated_data.pop('create_version', False)
