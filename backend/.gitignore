@@ -1,0 +1,177 @@
+# ================================
+# 🐍 PYTHON / DJANGO
+# ================================
+
+# Байт-код и кэш
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Распространённые артефакты сборки
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Виртуальные окружения (ВСЕ варианты)
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Django-specific
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Миграции (если не хочешь коммитить пустые)
+# **/migrations/*.py
+# **/migrations/__init__.py
+# !**/migrations/__init__.py
+# !**/migrations/0001_initial.py
+
+# ================================
+# 🔐 СЕКРЕТЫ И КОНФИГИ
+# ================================
+
+# Локальные переменные окружения (НИКОГДА не коммить!)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Ключи, токены, приватные конфиги
+*.pem
+*.key
+*.secret
+config.json
+secrets.json
+
+# ================================
+# 🗄️ БАЗЫ ДАННЫХ И ФАЙЛЫ
+# ================================
+
+# SQLite (локальная БД)
+*.sqlite3
+*.sqlite3-journal
+
+# Медиа и статика (если не собираешь в репо)
+/media/
+/static/CACHE/
+staticfiles/
+
+# Загрузки пользователей (если не на объектном хранилище)
+uploads/
+user_uploads/
+
+# ================================
+# 📦 ЗАВИСИМОСТИ
+# ================================
+
+# Менеджеры пакетов (но requirements.txt — КОММИТИТЬ!)
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ================================
+# 🛠️ IDE И РЕДАКТОРЫ
+# ================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ================================
+# 🖥️ ОС-СПЕЦИФИЧНЫЕ ФАЙЛЫ
+# ================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.trash-*
+.nfs*
+
+# ================================
+# 🧪 ТЕСТЫ И ПОКРЫТИЕ
+# ================================
+
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ================================
+# 📡 ASYNC / CHANNELS / REDIS
+# ================================
+
+# Логи каналов/воркеров
+channels.log
+worker.log
+celerybeat-schedule
+
+# ================================
+# 🚀 DEPLOY / DOCKER (опционально)
+# ================================
+
+# Если не используешь в репо:
+docker-compose.override.yml
+*.dockerignore
+!.dockerignore
+
+# Локальные конфиги деплоя
+deploy.local.yml
+nginx.local.conf
+
+# ================================
+# 🎯 MWS TABLES SPECIFIC
+# ================================
+
+# Локальные тестовые данные
+test_data/
+fixtures/local_*.json
+
+# Временные файлы синхронизации
+.sync_tmp/
+*.sync.lock
+
+# Кэш API-запросов (если реализуешь локально)
+api_cache/
+*.cache
