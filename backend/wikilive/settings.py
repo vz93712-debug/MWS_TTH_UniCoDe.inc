@@ -39,7 +39,11 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
+<<<<<<< HEAD
     'django_celery_results',
+=======
+    "django_celery_results",
+>>>>>>> 916b3a2 (залил celery+частично фронт)
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -261,7 +265,38 @@ CHANNEL_LAYERS = {
     },
 }
 
+<<<<<<< HEAD
 # MWS GPT
 
 MWS_GPT_API_KEY = env("MWS_GPT_API_KEY")
 MWS_GPT_BASE_URL = env("MWS_GPT_BASE_URL")
+=======
+# CELERY SETTINGS
+from celery.schedules import crontab
+
+CELERY_BROKER_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+CELERY_ACCEPT_CONTENT = ["application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+# Расписание фоновых задач (Celery Beat)
+CELERY_BEAT_SCHEDULE = {
+    # Каждую минуту опрашиваем MWS таблицы
+    "poll-mws-tables-every-minute": {
+        "task": "wiki.poll_mws_tables",
+        "schedule": crontab(minute="*"),  # Каждую минуту
+    },
+    # Каждую ночь в 3:00 чистим старые версии страниц
+    "cleanup-versions-daily": {
+        "task": "wiki.cleanup_old_versions",
+        "schedule": crontab(hour=3, minute=0),
+    },
+    # Каждую ночь в 4:00 чистим мусор от AI-генераций
+    "cleanup-ai-tasks-daily": {
+        "task": "wiki.cleanup_ai_tasks",
+        "schedule": crontab(hour=4, minute=0),
+    },
+}
+>>>>>>> 916b3a2 (залил celery+частично фронт)
