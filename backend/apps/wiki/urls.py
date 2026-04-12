@@ -16,6 +16,9 @@ from apps.wiki.views.views_sync import (
     PresenceView, 
     SyncStateView
 )
+from apps.wiki.views.views_backlinks import (
+    BacklinksView, OutgoingLinksView
+)
 
 
 urlpatterns = [
@@ -35,5 +38,9 @@ urlpatterns = [
 
     path('<uuid:page_id>/sync-state/', SyncStateView.as_view(), name='page-sync-state'),
     path('<uuid:page_id>/presence/', PresenceView.as_view(), name='page-presence'),
+
+    path('<uuid:page_id>/backlinks/', BacklinksView.as_view(), name='page-backlinks'),
+    path('<uuid:page_id>/outgoing-links/', OutgoingLinksView.as_view(), name='page-outgoing-links'),
+
 
 ]

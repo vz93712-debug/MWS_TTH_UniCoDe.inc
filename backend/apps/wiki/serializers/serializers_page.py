@@ -1,4 +1,8 @@
 from rest_framework import serializers
+from django.db import transaction
+
+from apps.wiki.utils.backlinks import sync_page_links
+from apps.wiki.utils.linked_entities import sync_linked_entities
 from apps.wiki.models import WikiPage, WikiPageVersion, PageMembership
 from apps.spaces.models import Space, SpaceMembership
 
@@ -75,27 +79,38 @@ class WikiPageUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         create_version = validated_data.pop('create_version', False)
         version_comment = validated_data.pop('version_comment', "")
+    
+        try:
+            with transaction.atomic():
+                
+                # Стандартное обновление полей
+                for attr, value in validated_data.items():
+                    setattr(instance, attr, value)
+                instance.updated_by = self.context['request'].user
+                instance.save()
 
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
+                # Версионирование
+                if create_version:
+                    instance.current_version += 1
+                    instance.save(update_fields=['current_version'])
 
-        instance.updated_by = self.context['request'].user
-        instance.save()
+                    WikiPageVersion.objects.create(
+                        page=instance,
+                        version_number=instance.current_version,  # Уже новый номер
+                        content=instance.content,                  # Снапшот контента
+                        comment=version_comment,                   # Комментарий из запроса
+                        created_by=instance.updated_by             # Кто создал
+                    )
 
-        if create_version:
-            instance.current_version += 1
-            instance.save(update_fields=['current_version'])
-            
-            WikiPageVersion.objects.create(
-                page=instance,
-                version_number=instance.current_version,
-                content=instance.content,
-                comment=version_comment,
-                created_by=instance.updated_by
-            )
+                sync_page_links(instance)
+                sync_linked_entities(instance)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise
 
         return instance
-
+    
 
 class WikiPageMoveSerializer(serializers.Serializer):
     """

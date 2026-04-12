@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import SpaceViewSet, SpaceMembershipViewSet, WikiPageView
+from apps.spaces.views import SpaceViewSet, SpaceMembershipViewSet, WikiPageView
+
+from apps.wiki.views.views_backlinks import SpaceGraphView
 
 router = DefaultRouter()
 router.register(r'', SpaceViewSet, basename='space')
@@ -28,4 +30,5 @@ urlpatterns = [
     path('<uuid:space_id>/members/', include(membership_patterns)),
     path('<uuid:space_id>/pages/', WikiPageView.as_view(), name='wiki-page-list'),
 
+    path('<uuid:space_id>/graph/', SpaceGraphView.as_view(), name='space-graph'),
 ]

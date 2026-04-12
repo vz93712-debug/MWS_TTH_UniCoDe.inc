@@ -1,15 +1,19 @@
-from django.db import models
+from django.db import models, transaction
 from apps.core.models import BaseModel
 from apps.users.models import User
 from apps.spaces.models import Space
 
+import re
+
+
 class WikiPage(BaseModel):
     """
     Страница вики.
+    При создании без title автоматически получает уникальное имя в рамках пространства.
     """
     space = models.ForeignKey(Space, on_delete=models.CASCADE, related_name='pages', verbose_name="Пространство")
-    title = models.CharField(max_length=500, verbose_name="Заголовок")
-    description = models.TextField(blank=True, verbose_name="Краткое описание")
+    title = models.CharField(max_length=500, blank=True, default="", verbose_name="Заголовок")
+    description = models.TextField(blank=True, default="", verbose_name="Краткое описание")
     
     # Контент
     content = models.JSONField(default=dict, verbose_name="Содержимое (Lexical JSON)")
@@ -28,7 +32,10 @@ class WikiPage(BaseModel):
 
     class Meta:
         db_table = 'wiki_pages'
-        unique_together = ['space', 'id']
+        # Уникальность заголовка в рамках пространства (защита от гонок)
+        constraints = [
+            models.UniqueConstraint(fields=['space', 'title'], name='unique_space_page_title')
+        ]
         indexes = [
             models.Index(fields=['space', '-updated_at']),
             models.Index(fields=['id']),
@@ -37,6 +44,40 @@ class WikiPage(BaseModel):
     def __str__(self):
         return f'{self.space.name} {self.title}'
 
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        
+        # Автогенерация заголовка только при создании и если он пустой
+        if is_new and not self.title:
+            with transaction.atomic():
+                self.title = self._generate_default_title()
+                
+        super().save(*args, **kwargs)
+
+    def _generate_default_title(self) -> str:
+        base_title = "Новая страница"
+        
+        # Получаем все заголовки в этом пространстве, начинающиеся с базового
+        existing = WikiPage.objects.filter(
+            space=self.space, 
+            title__startswith=base_title
+        ).values_list('title', flat=True)
+        
+        max_num = 0
+        for title in existing:
+            if title == base_title:
+                num = 1
+            else:
+                # Ищем число в конце: "Новая страница 123"
+                match = re.match(rf"^{re.escape(base_title)}\s+(\d+)$", title)
+                num = int(match.group(1)) if match else 0
+            if num > max_num:
+                max_num = num
+                
+        # Если max_num == 0 → возвращаем "Новая страница"
+        # Если max_num >= 1 → возвращаем "Новая страница {max_num + 1}"
+        return f"{base_title} {max_num + 1}" if max_num >= 1 else base_title
+    
 
 class WikiPageVersion(BaseModel):
     """
