@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
+    'django_celery_results',
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -213,10 +214,19 @@ LOGGING = {
     },
 }
 
+# REDIS & CACHE
+REDIS_HOST = env("REDIS_HOST", default="127.0.0.1")
+REDIS_PORT = env("REDIS_PORT", default=6379)
+REDIS_DB_CACHE = env("REDIS_DB_CACHE", default=1)
+REDIS_DB_CELERY = env("REDIS_DB_CELERY", default=2)
+
+REDIS_URL_CACHE = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CACHE}"
+REDIS_URL_CELERY = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CELERY}"
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
+        "LOCATION": env("REDIS_URL_CACHE", default=REDIS_URL_CACHE),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             # Убираем автоматическое добавление версии (:1:) к ключам
@@ -228,6 +238,19 @@ CACHES = {
     }
 }
 
+
+# CELERY
+
+CELERY_BROKER_URL = env("REDIS_URL_CELERY", default=REDIS_URL_CELERY)
+CELERY_RESULT_BACKEND = env("REDIS_URL_CELERY", default=REDIS_URL_CELERY)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = env("TIMEZONE", default="Europe/Moscow")
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут
+
+
 # CHANNELS & WEBSOCKETS
 CHANNEL_LAYERS = {
     "default": {
@@ -237,3 +260,8 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# MWS GPT
+
+MWS_GPT_API_KEY = env("MWS_GPT_API_KEY")
+MWS_GPT_BASE_URL = env("MWS_GPT_BASE_URL")

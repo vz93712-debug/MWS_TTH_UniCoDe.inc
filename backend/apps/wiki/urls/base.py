@@ -21,6 +21,7 @@ from apps.wiki.views.views_backlinks import (
 )
 
 
+
 urlpatterns = [
     # Детальная страница: Чтение, Обновление (Ctrl+S), Удаление
     path('<uuid:page_id>/', WikiPageDetailView.as_view(), name='wiki-page-detail'),
@@ -41,6 +42,4 @@ urlpatterns = [
 
     path('<uuid:page_id>/backlinks/', BacklinksView.as_view(), name='page-backlinks'),
     path('<uuid:page_id>/outgoing-links/', OutgoingLinksView.as_view(), name='page-outgoing-links'),
-
-
 ]

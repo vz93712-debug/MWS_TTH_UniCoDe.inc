@@ -23,6 +23,10 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.wiki.views.views_search import fulltext_search, search_users
 from apps.wiki.views.views_images import upload_media
 
+from apps.wiki.views.views_ai import (
+    AIEditTextView, AITableGenerateView, AITaskStatusView, 
+)
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
@@ -38,6 +42,10 @@ urlpatterns = [
     path('api/v1/search/', fulltext_search, name='fulltext-search'), 
     path('api/v1/search/users/', search_users, name='users-search'), 
     path('api/v1/media/upload/', upload_media, name='upload-media'), 
+
+    path("api/v1/ai/generate-table/", AITableGenerateView.as_view(), name="ai-generate-table"),
+    path("api/v1/ai/edit-text/", AIEditTextView.as_view(), name="ai-edit-text"),
+    path("api/v1/ai/tasks/<str:task_id>/", AITaskStatusView.as_view(), name="ai-task-status"),
 
 ]
 
