@@ -1,4 +1,8 @@
 from django.db import models, transaction
+from django.contrib.postgres.search import SearchVectorField
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
+
 from apps.core.models import BaseModel
 from apps.users.models import User
 from apps.spaces.models import Space
@@ -30,6 +34,8 @@ class WikiPage(BaseModel):
     # Версионирование
     current_version = models.IntegerField(default=1, verbose_name="Текущая версия")
 
+    search_vector = SearchVectorField(null=True, blank=True, verbose_name="Вектор поиска")
+
     class Meta:
         db_table = 'wiki_pages'
         # Уникальность заголовка в рамках пространства (защита от гонок)
@@ -39,6 +45,7 @@ class WikiPage(BaseModel):
         indexes = [
             models.Index(fields=['space', '-updated_at']),
             models.Index(fields=['id']),
+            GinIndex(fields=['search_vector']), 
         ]
 
     def __str__(self):
@@ -53,6 +60,17 @@ class WikiPage(BaseModel):
                 self.title = self._generate_default_title()
                 
         super().save(*args, **kwargs)
+
+        # Собираем вектор из заголовка (вес A - самый важный) и описания (вес B)
+        # Для JSON-контента приводим его к тексту
+        vector = (
+            SearchVector('title', weight='A', config='russian') +
+            SearchVector('description', weight='B', config='russian') +
+            SearchVector('content', weight='C', config='russian')
+        )
+        # Обновляем поле без вызова сигналов, чтобы не зациклить save()
+        WikiPage.objects.filter(pk=self.pk).update(search_vector=vector)
+
 
     def _generate_default_title(self) -> str:
         base_title = "Новая страница"

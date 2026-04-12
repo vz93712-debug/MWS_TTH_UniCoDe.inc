@@ -2,10 +2,11 @@ import json
 from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, parsers
+from rest_framework import status, permissions
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import APIException
 from django.http import StreamingHttpResponse
+from rest_framework.parsers import MultiPartParser, FormParser
+import requests
 
 from apps.wiki.serializers.serializers_mws import *
 from apps.wiki.throttles import MWSProxyThrottle
@@ -281,48 +282,133 @@ class MWSViewMoveView(BaseMWSProxyView):
 # ============================================================================
 
 class MWSAttachmentDownloadView(BaseMWSProxyView):
-    """GET /api/v1/mws/datasheets/{dst_id}/attachments/ -> Stream File"""
+    """GET /api/v1/mws/datasheets/{dst_id}/attachments/?token=... -> Stream File"""
+    
     def get(self, request, dst_id):
-        return self.process_proxy(
-            'GET',
-            f'/datasheets/{dst_id}/attachments',
-            query_serializer_class=AttachmentDownloadQuerySerializer,
-            is_file=True
-        )
+        from rest_framework.exceptions import APIException
+        
+        serializer = AttachmentDownloadQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        
+        token = serializer.validated_data['token']
+        url_path = f'/datasheets/{dst_id}/attachments'
+        params = {'token': token}
+        
+        try:
+            # Делаем запрос к MWS
+            mws_response = MWSClient.request(
+                self.request, 
+                'GET', 
+                url_path,
+                params=params,
+                return_raw=True
+            )
+            
+            # ПРОВЕРКА: если MWS вернул ошибку
+            if mws_response.status_code != 200:
+                print(f"❌ MWS Error: {mws_response.status_code}")
+                print(f"❌ MWS Body: {mws_response.text}")
+                raise APIException(
+                    detail=f"MWS API error: {mws_response.text}", 
+                    code=mws_response.status_code
+                )
+            
+            # Проверяем Content-Type
+            content_type = mws_response.headers.get('Content-Type', '')
+            print(f"✅ MWS Content-Type: {content_type}")
+            print(f"✅ MWS Content-Length: {mws_response.headers.get('Content-Length')}")
+            
+            # Если это не бинарный файл — возвращаем ошибку
+            if 'application/json' in content_type:
+                # MWS вернул JSON вместо файла
+                error_data = mws_response.json()
+                print(f"❌ MWS returned JSON error: {error_data}")
+                raise APIException(detail=f"MWS error: {error_data}", code=400)
+            
+            # Возвращаем файл
+            response = StreamingHttpResponse(
+                mws_response.iter_content(chunk_size=8192),
+                content_type=content_type,
+                status=mws_response.status_code
+            )
+            
+            filename = token.split('/')[-1] if '/' in token else 'file'
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            
+            if 'Content-Length' in mws_response.headers:
+                response['Content-Length'] = mws_response.headers['Content-Length']
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ Exception in download: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+    
 
-class MWSAttachmentUploadView(BaseMWSProxyView):
-    """POST /api/v1/mws/datasheets/{dst_id}/attachments/ -> Upload File"""
-    parser_classes = [parsers.MultiPartParser, parsers.FormParser]
-
+class MWSAttachmentUploadView(APIView):
+    """POST /api/v1/mws/datasheets/{dst_id}/attachments/upload/"""
+    permission_classes = [permissions.IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
     def post(self, request, dst_id):
-        # 1. Валидируем только файл из multipart/form-data
-        file_serializer = UploadAttachmentSerializer(data=request.data)
-        file_serializer.is_valid(raise_exception=True)
-
-        params = {}
-        record_id = request.query_params.get('recordId')
-        field_id = request.query_params.get('fieldId')
-
-        if record_id and field_id:
-            params['recordId'] = record_id
-            params['fieldId'] = field_id
-        elif record_id or field_id:
+        # Логирование для отладки        
+        # Получаем файл
+        if not request.FILES:
             return Response(
-                {"detail": "recordId и fieldId должны быть указаны вместе или оба пропущены."},
+                {"detail": "No files in request.FILES"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # 3. Проксирование запроса в MWS Tables
-        try:
-            mws_response = MWSClient.request(
-                self.request,
-                'POST',
-                f'/datasheets/{dst_id}/attachments',
-                files={'file': file_serializer.validated_data['file']},
-                params=params
+        
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response(
+                {"detail": "File field 'file' not found. Available keys: " + str(list(request.FILES.keys()))}, 
+                status=status.HTTP_400_BAD_REQUEST
             )
-            return Response(mws_response, status=status.HTTP_201_CREATED)
+        
+        # Проверяем пользователя и токен
+        user = request.user
+        if not hasattr(user, 'mws_api_token') or not user.mws_api_token:
+            return Response(
+                {"detail": "MWS API token not configured"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Параметры запроса
+        params = {}
+        if request.query_params.get('recordId'):
+            params['recordId'] = request.query_params.get('recordId')
+        if request.query_params.get('fieldId'):
+            params['fieldId'] = request.query_params.get('fieldId')
+        
+        # Заголовки для MWS
+        headers = {
+            "Authorization": f"Bearer {user.mws_api_token}"
+        }
+        
+        # Файл для отправки
+        files = {
+            'file': (uploaded_file.name, uploaded_file, uploaded_file.content_type)
+        }
+        
+        # Отправка в MWS
+        mws_url = f"https://tables.mws.ru/fusion/v1/datasheets/{dst_id}/attachments"
+        
+        try:
+            response = requests.post(
+                mws_url,
+                headers=headers,
+                files=files,
+                params=params,
+                timeout=30
+            )
+            response.raise_for_status()
+            return Response(response.json(), status=status.HTTP_201_CREATED)
             
-        except APIException as e:
-            # Пробрасываем ошибку MWS (400/401/404/503) на фронтенд без изменения статуса
-            return Response(e.detail, status=e.status_code)
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {"detail": f"MWS API error: {str(e)}"}, 
+                status=status.HTTP_502_BAD_GATEWAY
+            )

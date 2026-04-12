@@ -16,9 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-
+from apps.wiki.views.views_search import fulltext_search, search_users
+from apps.wiki.views.views_images import upload_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,4 +35,11 @@ urlpatterns = [
     path('api/v1/pages/', include('apps.wiki.urls.base'), ),
     path('api/v1/mws/', include('apps.wiki.urls.mws'), ),  
 
+    path('api/v1/search/', fulltext_search, name='fulltext-search'), 
+    path('api/v1/search/users/', search_users, name='users-search'), 
+    path('api/v1/media/upload/', upload_media, name='upload-media'), 
+
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

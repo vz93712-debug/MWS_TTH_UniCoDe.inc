@@ -6,13 +6,17 @@ class MWSClient:
     BASE_URL = "https://tables.mws.ru/fusion/v1"
 
     @staticmethod
-    def request(request_obj, method, url_path, **kwargs):
+    def request(request_obj, method, url_path, return_raw=False, **kwargs):
         """
         Универсальный метод для проксирования запросов.
-        request_obj - объект Django Request (нужен для получения токена юзера)
+        
+        Args:
+            request_obj - объект Django Request (нужен для получения токена юзера)
+            return_raw - если True, возвращает сырой requests.Response (для файлов)
         """
         user = request_obj.user
         if not user.mws_api_token:
+            from rest_framework.exceptions import APIException
             raise APIException("MWS API Token not configured for this user.")
 
         headers = {
@@ -36,14 +40,24 @@ class MWSClient:
             )
             response.raise_for_status()
             
-            # Если ответ бинарный (файл), возвращаем его как есть
-            if "application/json" not in response.headers.get("Content-Type", ""):
+            # Если запрошен сырой ответ (для файлов) - возвращаем response объект
+            if return_raw:
+                return response
+            
+            # Проверяем Content-Type ответа
+            content_type = response.headers.get("Content-Type", "")
+            if "application/json" not in content_type:
                 return response
             
             return response.json()
             
         except requests.exceptions.HTTPError as e:
-            # Пробрасываем ошибку MWS на фронтенд
-            raise APIException(detail=response.json() if response.text else str(e), code=response.status_code)
+            from rest_framework.exceptions import APIException
+            try:
+                error_detail = response.json()
+            except:
+                error_detail = str(e)
+            raise APIException(detail=error_detail, code=response.status_code)
         except requests.exceptions.RequestException as e:
+            from rest_framework.exceptions import APIException
             raise APIException(detail="MWS Service Unavailable", code=502)
