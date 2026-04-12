@@ -29,6 +29,7 @@ urlpatterns = [
 
     path('api/v1/spaces/', include('apps.spaces.urls'), ), 
 
-    path('api/v1/pages/', include('apps.wiki.urls'), ), 
+    path('api/v1/pages/', include('apps.wiki.urls.base'), ),
+    path('api/v1/mws/', include('apps.wiki.urls.mws'), ),  
 
 ]
