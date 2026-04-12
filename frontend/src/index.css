@@ -1,3 +1,65 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 1. Регистрируем Шрифты MTS */
+
+@font-face {
+  font-family: 'MTS Compact';
+  src: url('/fonts/MTSCompact-Regular-7LG3MIHS.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'MTS Compact';
+  src: url('/fonts/MTSCompact-Medium-Y4SPBQKE.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'MTS Compact';
+  src: url('/fonts/MTSCompact-Bold-LBQB3WRX.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'MTS Wide';
+  src: url('/fonts/MTSWide-Bold-XQ34CV62.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* 2. Применяем шрифты по умолчанию */
+
+@layer base {
+  html {
+    /* Основной шрифт - MTS Compact Regular */
+    font-family: 'MTS Compact', sans-serif;
+    @apply text-[#19191C];
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Переопределяем font-serif на MTS Wide (font-display) */
+  .font-serif, h1, h2, h3 {
+    font-family: 'MTS Wide', serif;
+    font-weight: 700;
+  }
+}
+
+/* 3. Кастомные утилиты */
+
+@layer utilities {
+  /* Тонкие серые разделители, как на макетах */
+  .border-divider {
+    border-color: #E6E8EA;
+  }
+  
+  /* Убираем scrollbar, сохраняя прокрутку */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
