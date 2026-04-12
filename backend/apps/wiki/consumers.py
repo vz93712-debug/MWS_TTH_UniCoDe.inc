@@ -23,6 +23,20 @@ def get_user_by_token(token):
         return None
 
 
+# 👇 НОВЫЕ БЕЗОПАСНЫЕ ОВЕРТКИ ДЛЯ REDIS 👇
+@database_sync_to_async
+def async_cache_get(key, default=None):
+    return cache.get(key, default)
+
+
+@database_sync_to_async
+def async_cache_set(key, value, timeout):
+    cache.set(key, value, timeout=timeout)
+
+
+# 👆 ==================================== 👆
+
+
 class WikiPageConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.page_id = self.scope["url_route"]["kwargs"]["page_id"]  # type: ignore
@@ -47,7 +61,7 @@ class WikiPageConsumer(AsyncWebsocketConsumer):
         await self.add_to_presence()
 
         # 3. Handshake: Отправляем текущее состояние (байты)
-        current_state = cache.get(self.state_key)
+        current_state = await async_cache_get(self.state_key)
         if current_state:
             await self.send(bytes_data=current_state)  # type: ignore
 
@@ -64,7 +78,7 @@ class WikiPageConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         if bytes_data:
             # Обновляем состояние в Redis
-            cache.set(self.state_key, bytes_data, timeout=3600)
+            await async_cache_set(self.state_key, bytes_data, timeout=3600)
 
             await self.channel_layer.group_send(  # type: ignore
                 self.room_group_name,
@@ -80,16 +94,16 @@ class WikiPageConsumer(AsyncWebsocketConsumer):
             await self.send(bytes_data=event["bytes_data"])  # type: ignore
 
     async def add_to_presence(self):
-        users = cache.get(self.presence_key, []) or []
+        users = await async_cache_get(self.presence_key, []) or []
         user_data = {
             "id": str(self.user.id),
             "email": self.user.email,
         }
         if user_data not in users:
             users.append(user_data)
-            cache.set(self.presence_key, users, timeout=300)
+            await async_cache_set(self.presence_key, users, timeout=300)
 
     async def remove_from_presence(self):
-        users = cache.get(self.presence_key, []) or []
+        users = await async_cache_get(self.presence_key, []) or []
         users = [u for u in users if u["id"] != str(self.user.id)]
-        cache.set(self.presence_key, users, timeout=300)
+        await async_cache_set(self.presence_key, users, timeout=300)

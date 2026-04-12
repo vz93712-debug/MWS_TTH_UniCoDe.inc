@@ -213,15 +213,18 @@ LOGGING = {
     },
 }
 
-# REDIS & CACHE
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": os.getenv("REDIS_URL", "redis://127.0.0.1:6379/1"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            # Убираем автоматическое добавление версии (:1:) к ключам
+            "IGNORE_EXCEPTIONS": True,
         },
-        "KEY_PREFIX": "wikilive_cache",
+        # Оставляем префикс пустым, чтобы ключи были "как есть"
+        # Либо ставим короткий "wiki", если хотим порядка
+        "KEY_PREFIX": "",
     }
 }
 
