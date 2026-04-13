@@ -55,7 +55,7 @@ class MWSGPTService:
 
 ### 🔢 Числовые
 • `Number` — число с настройками
-  { "type": "Number", "property": { "precision": 0, "symbol": "", "commaStyle": "," } }
+  { "type": "Number", "property": { "precision": 0, "symbol": "" } }
   // precision: 0-4 (знаков после запятой), symbol: единица измерения, commaStyle: разделитель тысяч
 • `Currency` — валюта
   { "type": "Currency", "property": { "precision": 2, "symbol": "₽", "symbolAlign": "Default" } }
@@ -172,6 +172,41 @@ class MWSGPTService:
 4. Для действия "formalize" — используй официально-деловой стиль.
 5. Для действия "fix" — исправь орфографию, пунктуацию, грамматику."""
 
+    SYSTEM_SMART_IMPORT = """Ты — строгий конвертер документов в формат Lexical JSON.
+Твоя задача: преобразовать исходный Markdown/HTML в валидный Lexical EditorState JSON.
+
+🔴 ЖЁСТКИЕ ПРАВИЛА:
+1. СОХРАНЯЙ 100% ИСХОДНОГО ТЕКСТА. Никаких сокращений, перефразирований, добавлений или удаления информации.
+2. СТРУКТУРА ДОЛЖНА СОВПАДАТЬ 1:1. Заголовки → заголовки, списки → списки, код → код.
+3. Возвращай ТОЛЬКО валидный JSON. Без пояснений, без markdown-обёрток, без текста до/после.
+4. Используй стандартную схему Lexical EditorState:
+{
+  "root": {
+    "type": "root",
+    "children": [ ...nodes... ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "version": 1
+  }
+}
+
+📐 МАППИНГ УЗЛОВ:
+• Текст/Параграф → {"type": "paragraph", "children": [{"type": "text", "text": "...", "format": 0, "mode": "normal", "style": "", "version": 1}]}
+• Заголовки (#, ##, ###) → {"type": "heading", "level": N, "children": [...]}
+• Маркированный список (-, *) → {"type": "list", "listType": "bullet", "children": [{"type": "listitem", "value": N, "children": [...]}]}
+• Нумерованный список (1., 2.) → {"type": "list", "listType": "number", "children": [...]}
+• Жирный → "format": 1, Курсив → "format": 2, Код → "format": 16
+• Ссылки [text](url) → {"type": "link", "url": "...", "children": [{"type": "text", "text": "...", "format": 0}]}
+• Картинки ![alt](url) → {"type": "image", "src": "...", "alt": "...", "width": 800, "height": 600, "maxWidth": "100%"}
+• Таблицы |...| → {"type": "table", "children": [{"type": "tablerow", "children": [{"type": "tablecell", "colSpan": 1, "rowSpan": 1, "headerState": 1, "children": [...]}]}]}
+• Код-блоки ``` → {"type": "code", "language": "...", "children": [{"type": "text", "text": "...", "format": 0}]}
+
+⚠️ ВАЖНО:
+• Если элемент не распознан, помести его в "paragraph" как есть.
+• Не добавляй поля, которых нет в схеме.
+• Начинай ответ с { и заканчивай }."""
+
     @classmethod
     def generate_table_macro(cls, user_prompt: str) -> dict:
         """
@@ -235,7 +270,7 @@ class MWSGPTService:
             "shorten": "Сократи текст до 1-2 предложений, сохранив главную мысль.",
             "formalize": "Перепиши текст в официально-деловом стиле.",
             "fix": "Исправь орфографию, пунктуацию и грамматику.",
-            "expand": "Расширь текст, добавив детали и примеры."
+            "expand": "Расширь текст, добавив детали."
         }
         
         instruction = action_descriptions.get(action, "Улучши текст.")
@@ -271,3 +306,37 @@ class MWSGPTService:
         except Exception as e:
             logger.error(f"Embedding error: {e}")
             return []
+        
+    @classmethod
+    def parse_smart_import(cls, raw_text: str, file_type: str = "markdown") -> dict:
+        """
+        Конвертирует Markdown/HTML в Lexical JSON с сохранением 100% контента.
+        """
+        try:
+            response = client.chat.completions.create(
+                model=cls.MODEL_INSTRUCT,  # qwen2.5-72b-instruct лучше для текста
+                messages=[
+                    {"role": "system", "content": cls.SYSTEM_SMART_IMPORT},
+                    {"role": "user", "content": f"Формат входных данных: {file_type}\n\nИсходный текст:\n{raw_text}"}
+                ],
+                temperature=0.0,  # Строгая детерминированность
+                max_tokens=12000, # Для больших документов
+                response_format={"type": "json_object"}
+            )
+            
+            raw_content = response.choices[0].message.content.strip()
+            
+            # Очистка от возможных markdown-обёрток
+            if raw_content.startswith("```json"):
+                raw_content = raw_content[7:-3].strip()
+            elif raw_content.startswith("```"):
+                raw_content = raw_content[3:-3].strip()
+                
+            return json.loads(raw_content)
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Smart import JSON parse error: {e}")
+            return {"error": "parse_error", "raw": raw_content[:500]}
+        except Exception as e:
+            logger.error(f"Smart import error: {e}")
+            return {"error": str(e)}

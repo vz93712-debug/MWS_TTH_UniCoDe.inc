@@ -2,12 +2,14 @@ import hashlib
 import json
 from datetime import timedelta
 
-# Подключаем модели и сервисы
-from apps.wiki.models import LinkedEntity, WikiPageVersion
-from apps.wiki.services.mws_client import MWSClient
-from apps.wiki.services.mws_gpt import MWSGPTService
 from asgiref.sync import async_to_sync
 from celery import shared_task
+from django.core.cache import cache
+from django.db import transaction
+from apps.wiki.services.mws_gpt import MWSGPTService
+from apps.wiki.services.mws_client import MWSClient
+from apps.wiki.models import WikiPage, WikiPageVersion, LinkedEntity
+
 from channels.layers import get_channel_layer
 from django.core.cache import cache
 from django.db.models import OuterRef
@@ -22,32 +24,50 @@ def generate_table_task(self, user_id: int, page_id: str, user_prompt: str):
     """Асинхронная генерация таблицы через MWS GPT."""
     try:
         result = MWSGPTService.generate_table_macro(user_prompt)
+        
         if "error" in result:
             return {"status": "failed", "error": result}
-        return {"status": "completed", "data": result, "page_id": page_id}
+        
+        return {
+            "status": "completed",
+            "data": result,
+            "page_id": page_id
+        }
+        
     except Exception as e:
         return {"status": "failed", "error": {"message": str(e)}}
-
+    
 
 @shared_task(bind=True, name="wiki.ai_edit_text")
 def edit_text_task(self, user_id: int, text: str, action: str, context: str = None):
     """Асинхронное редактирование текста через MWS GPT."""
     task_id = self.request.id
     cache.set(f"ai_task:{task_id}", {"status": "processing"}, timeout=300)
+    
     try:
         result = MWSGPTService.edit_text(text, action, context)
+        
         if "error" in result:
-            status_data = {"status": "failed", "error": result}
-        else:
-            status_data = {"status": "completed", "data": result}
-
-        cache.set(f"ai_task:{task_id}", status_data, timeout=TASK_RESULT_TTL)
+            cache.set(f"ai_task:{task_id}", {
+                "status": "failed",
+                "error": result
+            }, timeout=TASK_RESULT_TTL)
+            return result
+        
+        cache.set(f"ai_task:{task_id}", {
+            "status": "completed",
+            "data": result
+        }, timeout=TASK_RESULT_TTL)
+        
         return result
+        
     except Exception as e:
-        error_data = {"status": "failed", "error": {"message": str(e)}}
-        cache.set(f"ai_task:{task_id}", error_data, timeout=TASK_RESULT_TTL)
+        cache.set(f"ai_task:{task_id}", {
+            "status": "failed",
+            "error": {"message": str(e)}
+        }, timeout=TASK_RESULT_TTL)
         return {"error": str(e)}
-
+    
 
 @shared_task(bind=True, name="wiki.poll_mws_tables")
 def poll_mws_tables_task(self, page_id: str = None):
@@ -119,3 +139,43 @@ def cleanup_ai_tasks_task(self, ttl_hours: int = 24):
         return {"deleted_ai_tasks": deleted_count}
     except ImportError:
         return {"error": "django_celery_results не установлен"}
+
+
+@shared_task(bind=True, name="wiki.ai_smart_import")
+def smart_import_task(self, user_id: int, space_id: str, raw_text: str, file_type: str, title: str = None):
+    """
+    Импорт Markdown/HTML через ИИ → создание страницы WikiLive.
+    """
+    task_id = self.request.id
+    cache.set(f"ai_task:{task_id}", {"status": "processing"}, timeout=300)
+
+    try:
+        # 1. Парсинг текста в Lexical JSON
+        lexical_json = MWSGPTService.parse_smart_import(raw_text, file_type)
+        
+        if "error" in lexical_json:
+            cache.set(f"ai_task:{task_id}", {"status": "failed", "error": lexical_json}, timeout=TASK_RESULT_TTL)
+            return lexical_json
+
+        # 2. Создание страницы
+        page_title = title or lexical_json.get("title") or "Импортированный документ"
+        
+        with transaction.atomic():
+            page = WikiPage.objects.create(
+                space_id=space_id,
+                title=page_title,
+                content=lexical_json,
+                created_by_id=user_id,
+                updated_by_id=user_id
+            )
+            
+        cache.set(f"ai_task:{task_id}", {
+            "status": "completed",
+            "data": {"page_id": str(page.id), "title": page.title}
+        }, timeout=TASK_RESULT_TTL)
+        
+        return {"status": "completed", "page_id": str(page.id)}
+
+    except Exception as e:
+        cache.set(f"ai_task:{task_id}", {"status": "failed", "error": {"message": str(e)}}, timeout=TASK_RESULT_TTL)
+        return {"error": str(e)}

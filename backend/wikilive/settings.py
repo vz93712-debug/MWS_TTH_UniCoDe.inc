@@ -39,11 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
-<<<<<<< HEAD
     'django_celery_results',
-=======
-    "django_celery_results",
->>>>>>> 916b3a2 (залил celery+частично фронт)
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -265,21 +261,14 @@ CHANNEL_LAYERS = {
     },
 }
 
-<<<<<<< HEAD
+
 # MWS GPT
 
 MWS_GPT_API_KEY = env("MWS_GPT_API_KEY")
 MWS_GPT_BASE_URL = env("MWS_GPT_BASE_URL")
-=======
+
 # CELERY SETTINGS
 from celery.schedules import crontab
-
-CELERY_BROKER_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
-CELERY_RESULT_BACKEND = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
-CELERY_ACCEPT_CONTENT = ["application/json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = TIME_ZONE
 
 # Расписание фоновых задач (Celery Beat)
 CELERY_BEAT_SCHEDULE = {
@@ -299,4 +288,4 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=4, minute=0),
     },
 }
->>>>>>> 916b3a2 (залил celery+частично фронт)
+

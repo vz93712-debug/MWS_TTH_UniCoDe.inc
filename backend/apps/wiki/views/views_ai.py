@@ -3,8 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from django.core.cache import cache
-from apps.wiki.tasks import generate_table_task, edit_text_task
+
+from apps.wiki.serializers.serializers_ai import SmartImportSerializer
+from apps.wiki.tasks import generate_table_task, edit_text_task, smart_import_task
 from apps.wiki.services.mws_gpt import MWSGPTService
+
 from celery.result import AsyncResult
 
 
@@ -107,19 +110,27 @@ class AIEditTextView(APIView):
         }, status=status.HTTP_202_ACCEPTED)
 
 
-# === Альтернатива: синхронный эндпоинт для быстрых тестов ===
-# Используйте ТОЛЬКО для отладки, не в продакшене!
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def ai_generate_table_sync(request):
-    """Синхронная генерация таблицы (только для тестов!)"""
-    user_prompt = request.data.get("prompt", "").strip()
-    if not user_prompt:
-        return Response({"error": "Prompt required"}, status=400)
-    
-    result = MWSGPTService.generate_table_macro(user_prompt)
-    
-    if "error" in result:
-        return Response(result, status=503)
-    
-    return Response({"data": result})
+class AISmartImportView(APIView):
+    """
+    POST /api/v1/ai/smart-import/
+    Запускает асинхронный импорт документа через ИИ.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = SmartImportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        task = smart_import_task.delay(
+            user_id=request.user.id,
+            space_id=serializer.validated_data['space_id'],
+            raw_text=serializer.validated_data['content'],
+            file_type=serializer.validated_data['file_type'],
+            title=serializer.validated_data.get('title')
+        )
+
+        return Response({
+            "task_id": task.id,
+            "status": "queued",
+            "message": "Импорт запущен. Ожидайте завершения."
+        }, status=status.HTTP_202_ACCEPTED)

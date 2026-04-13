@@ -175,3 +175,9 @@ fixtures/local_*.json
 # Кэш API-запросов (если реализуешь локально)
 api_cache/
 *.cache
+
+
+# Celery runtime files
+celerybeat-schedule*
+dump.rdb
+*.pid
