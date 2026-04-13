@@ -14,6 +14,15 @@ class FlexibleQuerySerializer(serializers.Serializer):
         return data
 
 
+class CommaSeparatedListField(serializers.ListField):
+    """
+    Принимает либо список, либо строку через запятую: "a,b,c" → ["a", "b", "c"]
+    """
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = [item.strip() for item in data.split(',') if item.strip()]
+        return super().to_internal_value(data)
+
 # ============================================================================
 # 📁 SPACES & NODES
 # ============================================================================
@@ -65,7 +74,11 @@ class GetRecordsQuerySerializer(serializers.Serializer):
         help_text="Массив правил сортировки: [{'order': 'asc'|'desc', 'field': 'name'}]"
     )
     record_ids = serializers.ListField(child=serializers.CharField(), required=False, source='recordIds')
-    fields = serializers.ListField(child=serializers.CharField(), required=False)
+    fields = CommaSeparatedListField(
+        child=serializers.CharField(), 
+        required=False,
+        help_text="Список полей: ?fields=field1,field2 или ?fields=field1&fields=field2"
+    )
     filter_by_formula = serializers.CharField(required=False, source='filterByFormula')
     cell_format = serializers.ChoiceField(choices=['string', 'json'], required=False, default='json', source='cellFormat')
     field_key = serializers.ChoiceField(choices=['name', 'id'], required=False, default='name', source='fieldKey')

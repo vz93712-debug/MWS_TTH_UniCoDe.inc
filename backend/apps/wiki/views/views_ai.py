@@ -4,9 +4,10 @@ from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from django.core.cache import cache
 
-from apps.wiki.serializers.serializers_ai import SmartImportSerializer, ReportGenerationSerializer
-from apps.wiki.tasks import generate_table_task, edit_text_task, smart_import_task, generate_report_task
+from apps.wiki.serializers.serializers_ai import SmartImportSerializer, ReportGenerationSerializer, PageSummarizeSerializer, DiffExplainSerializer
+from apps.wiki.tasks import generate_table_task, edit_text_task, smart_import_task, generate_report_task, summarize_page_task, explain_diff_task
 from apps.wiki.services.mws_gpt import MWSGPTService
+from apps.wiki.permissions import IsSpaceOrPageMember
 
 from celery.result import AsyncResult
 
@@ -161,3 +162,53 @@ class AIReportGenerateView(APIView):
             "status": "queued",
             "message": "Генерация отчёта запущена. Данные запрашиваются из MWS Tables."
         }, status=status.HTTP_202_ACCEPTED)
+    
+
+class AISummarizePageView(APIView):
+    """
+    POST /api/v1/ai/summarize-page/
+    Запускает асинхронное сжатие содержимого страницы.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = PageSummarizeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        task = summarize_page_task.delay(
+            user_id=request.user.id,
+            page_id=serializer.validated_data['page_id'],
+            style=serializer.validated_data.get('style', 'bullets')
+        )
+
+        return Response({
+            "task_id": task.id,
+            "status": "queued",
+            "message": "Сжатие запущено. Ожидайте завершения."
+        }, status=status.HTTP_202_ACCEPTED)
+    
+
+class AIDiffExplainView(APIView):
+    """
+    POST /api/v1/ai/explain-diff/
+    Запускает асинхронное объяснение изменений между версиями.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsSpaceOrPageMember] # Используем твой класс прав
+
+    def post(self, request):
+        serializer = DiffExplainSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        task = explain_diff_task.delay(
+            user_id=request.user.id,
+            page_id=serializer.validated_data['page_id'],
+            version_id_from=serializer.validated_data.get('version_id_from'),
+            version_id_to=serializer.validated_data.get('version_id_to')
+        )
+
+        return Response({
+            "task_id": task.id,
+            "status": "queued",
+            "message": "Анализ изменений запущен."
+        }, status=status.HTTP_202_ACCEPTED)
+

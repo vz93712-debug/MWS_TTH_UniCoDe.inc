@@ -18,3 +18,14 @@ class ReportGenerationSerializer(serializers.Serializer):
         default="summary", 
         help_text="Тип отчёта: краткий, аналитический, табличный, произвольный"
     )
+
+class PageSummarizeSerializer(serializers.Serializer):
+    page_id = serializers.UUIDField(required=True)
+    style = serializers.ChoiceField(choices=["bullets", "paragraph"], default="bullets")
+
+
+class DiffExplainSerializer(serializers.Serializer):
+    page_id = serializers.UUIDField(required=True, help_text="ID страницы для проверки доступа")
+    version_id_from = serializers.UUIDField(required=False, allow_null=True, help_text="ID старой версии (если нет — берём предыдущую)")
+    version_id_to = serializers.UUIDField(required=False, allow_null=True, help_text="ID новой версии (если нет — берём текущую)")
+

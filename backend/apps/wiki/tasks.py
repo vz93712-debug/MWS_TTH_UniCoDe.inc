@@ -12,6 +12,7 @@ from apps.wiki.services.mws_client import MWSClient
 from apps.wiki.models import WikiPage, WikiPageVersion, LinkedEntity
 from apps.wiki.utils.backlinks import sync_page_links
 from apps.wiki.utils.linked_entities import  sync_linked_entities
+from apps.wiki.utils.extract_text import extract_text_from_lexical
 from apps.users.models import User 
 
 from channels.layers import get_channel_layer
@@ -289,3 +290,149 @@ def generate_report_task(self, user_id: int, dst_id: str, space_id: str, prompt:
         logger.exception(f"Report generation failed: {e}")
         cache.set(f"ai_task:{task_id}", {"status": "failed", "error": str(e)}, timeout=TASK_RESULT_TTL)
         return {"error": str(e)}
+    
+
+@shared_task(bind=True, name="wiki.ai_summarize_page")
+def summarize_page_task(self, user_id: int, page_id: str, style: str = "bullets"):
+    task_id = self.request.id
+    cache.set(f"ai_task:{task_id}", {"status": "processing"}, timeout=300)
+
+    try:
+        page = WikiPage.objects.get(id=page_id)
+        
+        # 1. Извлекаем текст из Lexical JSON
+        raw_text = extract_text_from_lexical(page.content)
+        if not raw_text or len(raw_text) < 50:
+            raise ValueError("Страница пуста или слишком коротка")
+
+        # 2. Отправляем в LLM (обрезка до 3000 символов защищает от перегрузки контекста)
+        result = MWSGPTService.summarize_content(raw_text, style)
+        
+        if "error" in result:
+            cache.set(f"ai_task:{task_id}", {"status": "failed", "error": result}, timeout=TASK_RESULT_TTL)
+            return result
+
+        cache.set(f"ai_task:{task_id}", {
+            "status": "completed",
+            "data": {"summary": result["summary"], "page_id": page_id}
+        }, timeout=TASK_RESULT_TTL)
+        
+        return {"status": "completed", "summary": result["summary"]}
+
+    except WikiPage.DoesNotExist:
+        cache.set(f"ai_task:{task_id}", {"status": "failed", "error": "Page not found"}, timeout=TASK_RESULT_TTL)
+        return {"error": "Page not found"}
+    except Exception as e:
+        logger.exception(f"Summarize task failed: {e}")
+        cache.set(f"ai_task:{task_id}", {"status": "failed", "error": str(e)}, timeout=TASK_RESULT_TTL)
+        return {"error": str(e)}
+    
+
+
+@shared_task(bind=True, name="wiki.ai_explain_diff")
+def explain_diff_task(self, user_id: int, page_id: str, version_id_from: str = None, version_id_to: str = None):
+    task_id = self.request.id
+    cache.set(f"ai_task:{task_id}", {"status": "processing"}, timeout=300)
+
+    try:
+        page = WikiPage.objects.get(id=page_id)
+        
+        # 1. ОПРЕДЕЛЯЕМ ТЕКСТ Б (Новый) - по умолчанию последняя СОХРАНЕННАЯ версия
+        content_b = None
+        label_b = ""
+        
+        if version_id_to:
+            # Если явно указана версия to
+            ver_to = WikiPageVersion.objects.get(id=version_id_to, page=page)
+            content_b = ver_to.content
+            label_b = f"Версия {ver_to.version_number}"
+        else:
+            # Берем последнюю версию из истории (не page.content!)
+            last_version = WikiPageVersion.objects.filter(page=page).order_by('-version_number').first()
+            if last_version:
+                content_b = last_version.content
+                label_b = f"Версия {last_version.version_number}"
+            else:
+                # Если версий нет вообще — сравниваем с текущим состоянием
+                content_b = page.content
+                label_b = "Текущая версия (Live)"
+        
+        # 2. ОПРЕДЕЛЯЕМ ТЕКСТ А (Старый) - предыдущая версия
+        content_a = None
+        label_a = ""
+        
+        if version_id_from:
+            # Если явно указана версия from
+            ver_from = WikiPageVersion.objects.get(id=version_id_from, page=page)
+            content_a = ver_from.content
+            label_a = f"Версия {ver_from.version_number}"
+        else:
+            # Ищем версию ПЕРЕД version_id_to (или перед последней)
+            query = WikiPageVersion.objects.filter(page=page).order_by('-version_number')
+            
+            if version_id_to:
+                # Если to указан, ищем всё что меньше
+                try:
+                    ver_to_num = WikiPageVersion.objects.get(id=version_id_to).version_number
+                    query = query.filter(version_number__lt=ver_to_num)
+                except WikiPageVersion.DoesNotExist:
+                    pass
+            else:
+                # Если to не указан, пропускаем самую последнюю (она уже в content_b)
+                query = query[1:]  # Пропускаем первую (последнюю по номеру)
+            
+            prev_version = query.first()
+            if prev_version:
+                content_a = prev_version.content
+                label_a = f"Версия {prev_version.version_number}"
+            else:
+                # Если предыдущей версии нет — страница создана с нуля
+                content_a = {"root": {"children": []}}
+                label_a = "Пустая страница (Создание)"
+        
+        # 3. ИЗВЛЕКАЕМ ТЕКСТ
+        text_a = extract_text_from_lexical(content_a)
+        text_b = extract_text_from_lexical(content_b)
+
+        if not text_a and not text_b:
+            result_summary = "Обе версии пусты. Изменений нет."
+        elif not text_a:
+            result_summary = "✅ Страница была создана с нуля."
+        elif not text_b:
+            result_summary = "❌ Всё содержимое было удалено."
+        else:
+            # 4. ВЫЗОВ ИИ
+            ai_result = MWSGPTService.explain_diff(text_a, text_b)
+            
+            if "error" in ai_result:
+                raise ValueError(f"AI Error: {ai_result['error']}")
+            
+            result_summary = ai_result.get("summary", "Изменений не найдено или они слишком малы.")
+
+        # 5. СОХРАНЕНИЕ В КЭШ
+        response_data = {
+            "status": "completed",
+            "data": {
+                "summary": result_summary,
+                "compared": f"{label_a} → {label_b}",
+                "page_id": str(page.id)
+            }
+        }
+        
+        cache.set(f"ai_task:{task_id}", response_data, timeout=TASK_RESULT_TTL)
+        return response_data
+
+    except WikiPage.DoesNotExist:
+        err = {"status": "failed", "error": "Page not found"}
+        cache.set(f"ai_task:{task_id}", err, timeout=TASK_RESULT_TTL)
+        return err
+    except WikiPageVersion.DoesNotExist:
+        err = {"status": "failed", "error": "Version not found"}
+        cache.set(f"ai_task:{task_id}", err, timeout=TASK_RESULT_TTL)
+        return err
+    except Exception as e:
+        logger.exception(f"Diff task failed: {e}")
+        err = {"status": "failed", "error": str(e)}
+        cache.set(f"ai_task:{task_id}", err, timeout=TASK_RESULT_TTL)
+        return err
+    

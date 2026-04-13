@@ -239,6 +239,36 @@ class MWSGPTService:
 
 НЕ добавляй ничего кроме JSON."""
 
+    SYSTEM_SUMMARIZER = """Ты — профессиональный редактор и аналитик документов.
+Твоя задача: создать краткое, точное резюме текста.
+
+🔴 ЖЁСТКИЕ ПРАВИЛА:
+1. Верни ТОЛЬКО текст резюме. Без вступлений ("Конечно, вот резюме"), без markdown-обёрток, без пояснений.
+2. Если запрошен стиль "bullets" — используй маркированный список. Если "paragraph" — один связный абзац.
+3. Сохраняй все важные факты, цифры, даты и выводы. Убери воду, повторы и маркетинговые обороты.
+4. Максимальный объём: 150 слов.
+5. Если текст пустой, слишком короткий или содержит только технические метаданные — верни: "Текст страницы слишком короткий или отсутствует для анализа."
+
+НЕ добавляй ничего кроме самого резюме."""
+
+    SYSTEM_DIFF_EXPLAINER = """Ты — технический редактор и аналитик.
+Твоя задача: проанализировать два текста (Старый и Новый) и составить краткое резюме изменений.
+
+🔴 ПРАВИЛА:
+1. Сравнивай текст А (Старый) и текст Б (Новый).
+2. Выводи результат строго в формате списка изменений.
+3. Используй эмодзи для типа изменения:
+   - ✅ Добавлено: ...
+   - ❌ Удалено: ...
+   - 📝 Изменено: ...
+4. Фокусируйся на фактах, цифрах, заголовках и ключевых словах.
+5. Игнорируй мелкие исправления пунктуации или стиля, если смысл не изменился.
+6. Если текст А пустой — напиши "Страница создана с нуля".
+7. Если текст Б пустой — напиши "Всё содержимое удалено".
+8. Будь краток. Максимум 5-7 пунктов.
+
+НЕ добавляй вводных слов. Только список."""
+
     @classmethod
     def generate_table_macro(cls, user_prompt: str) -> dict:
         """
@@ -371,4 +401,50 @@ class MWSGPTService:
             return {"error": "parse_error", "raw": raw_content[:500]}
         except Exception as e:
             logger.error(f"Smart import error: {e}")
+            return {"error": str(e)}
+        
+
+    @classmethod
+    def summarize_content(cls, text: str, style: str = "bullets") -> dict:
+        """
+        Сжимает текст через LLM.
+        """
+        try:
+            style_instruction = "Оформи в виде маркированного списка." if style == "bullets" else "Оформи в виде одного связного абзаца."
+            
+            response = client.chat.completions.create(
+                model=cls.MODEL_INSTRUCT,
+                messages=[
+                    {"role": "system", "content": cls.SYSTEM_SUMMARIZER},
+                    {"role": "user", "content": f"Стиль: {style_instruction}\n\nИсходный текст:\n{text[:3000]}"}
+                ],
+                temperature=0.1,
+                max_tokens=600
+            )
+            
+            return {"summary": response.choices[0].message.content.strip()}
+        except Exception as e:
+            logger.error(f"Summarize error: {e}")
+            return {"error": str(e)}
+        
+        
+    @classmethod
+    def explain_diff(cls, old_text: str, new_text: str) -> dict:
+        """
+        Сравнивает два текста и возвращает список изменений.
+        """
+        try:
+            response = client.chat.completions.create(
+                model=cls.MODEL_INSTRUCT,
+                messages=[
+                    {"role": "system", "content": cls.SYSTEM_DIFF_EXPLAINER},
+                    {"role": "user", "content": f"Старый текст (Версия А):\n{old_text}\n\nНовый текст (Версия Б):\n{new_text}"}
+                ],
+                temperature=0.0, # Детерминированность важна для сравнения
+                max_tokens=500
+            )
+            
+            return {"summary": response.choices[0].message.content.strip()}
+        except Exception as e:
+            logger.error(f"Diff explain error: {e}")
             return {"error": str(e)}

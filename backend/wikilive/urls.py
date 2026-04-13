@@ -25,7 +25,7 @@ from apps.wiki.views.views_images import upload_media
 
 from apps.wiki.views.views_ai import (
     AIEditTextView, AITableGenerateView, AITaskStatusView, AISmartImportView, 
-    AIReportGenerateView
+    AIReportGenerateView, AISummarizePageView, AIDiffExplainView
 )
 
 urlpatterns = [
@@ -48,7 +48,10 @@ urlpatterns = [
     path("api/v1/ai/edit-text/", AIEditTextView.as_view(), name="ai-edit-text"),
     path("api/v1/ai/tasks/<str:task_id>/", AITaskStatusView.as_view(), name="ai-task-status"),
     path('api/v1/ai/smart-import/', AISmartImportView.as_view(), name='ai-smart-import'),
-    path('api/v1/ai/generate-report/', AIReportGenerateView.as_view(), name='ai-generate-report')
+    path('api/v1/ai/generate-report/', AIReportGenerateView.as_view(), name='ai-generate-report'),
+    path("api/v1/ai/summarize-page/", AISummarizePageView.as_view(), name="ai-summarize-page"),
+    path("api/v1/ai/explain-diff/", AIDiffExplainView.as_view(), name="ai-explain-diff"),
+
 
 ]
 
