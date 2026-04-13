@@ -1,14 +1,18 @@
 import hashlib
 import json
 from datetime import timedelta
+import requests
 
 from asgiref.sync import async_to_sync
 from celery import shared_task
 from django.core.cache import cache
 from django.db import transaction
-from apps.wiki.services.mws_gpt import MWSGPTService
+from apps.wiki.services.mws_gpt import MWSGPTService, client
 from apps.wiki.services.mws_client import MWSClient
 from apps.wiki.models import WikiPage, WikiPageVersion, LinkedEntity
+from apps.wiki.utils.backlinks import sync_page_links
+from apps.wiki.utils.linked_entities import  sync_linked_entities
+from apps.users.models import User 
 
 from channels.layers import get_channel_layer
 from django.core.cache import cache
@@ -17,6 +21,7 @@ from django.utils import timezone
 
 # TTL для результатов задач в кэше (1 час)
 TASK_RESULT_TTL = 3600
+MWS_BASE_URL = "https://tables.mws.ru/fusion/v1"
 
 
 @shared_task(bind=True, name="wiki.ai_generate_table")
@@ -178,4 +183,109 @@ def smart_import_task(self, user_id: int, space_id: str, raw_text: str, file_typ
 
     except Exception as e:
         cache.set(f"ai_task:{task_id}", {"status": "failed", "error": {"message": str(e)}}, timeout=TASK_RESULT_TTL)
+        return {"error": str(e)}
+    
+
+import logging
+logger = logging.getLogger(__name__)
+
+
+@shared_task(bind=True, name="wiki.ai_generate_report")
+def generate_report_task(self, user_id: int, dst_id: str, space_id: str, prompt: str, limit: int = 100, report_type: str = "summary"):
+    """
+    Генерация аналитического отчёта на основе данных MWS Tables.
+    """
+    task_id = self.request.id
+    cache.set(f"ai_task:{task_id}", {"status": "processing"}, timeout=300)
+
+    try:
+        # 1. Получаем токен пользователя
+        user = User.objects.get(id=user_id)
+        if not user.mws_api_token:
+            raise ValueError("У пользователя не привязан MWS API Token")
+
+        headers = {"Authorization": f"Bearer {user.mws_api_token}"}
+
+        # 2. Забираем схему полей и данные из MWS API (Увеличен таймаут до 30с)
+        fields_resp = requests.get(f"{MWS_BASE_URL}/datasheets/{dst_id}/fields", headers=headers, timeout=30)
+        
+        # Уменьшаем limit до 50 для ускорения, если не передан явно
+        effective_limit = limit if limit else 50
+        
+        records_resp = requests.get(
+            f"{MWS_BASE_URL}/datasheets/{dst_id}/records",
+            headers=headers,
+            params={"pageSize": effective_limit, "cellFormat": "json"},
+            timeout=30
+        )
+        fields_resp.raise_for_status()
+        records_resp.raise_for_status()
+
+        fields_data = fields_resp.json().get("data", {})
+        records_data = records_resp.json().get("data", {})
+
+        # 3. Формируем компактное представление данных для LLM
+        table_name = fields_data.get("name", f"Таблица {dst_id}")
+        field_names = [f.get("name") or f.get("id") for f in fields_data.get("fields", [])]
+        
+        # Ограничиваем размер данных (~2000 символов для скорости)
+        records_json = json.dumps(records_data.get("records", []), ensure_ascii=False)
+        records_truncated = records_json[:2000] + ("..." if len(records_json) > 2000 else "")
+
+        data_context = f"Название таблицы: {table_name}\nПоля: {field_names}\nДанные (выборка {effective_limit} записей):\n{records_truncated}"
+
+        # 4. Вызов LLM с увеличенным таймаутом (120 секунд)
+        # Используем client.chat.completions.create напрямую, чтобы задать timeout
+        try:
+            response = client.chat.completions.create(
+                model=MWSGPTService.MODEL_INSTRUCT,
+                messages=[
+                    {"role": "system", "content": MWSGPTService.SYSTEM_REPORT_GENERATOR},
+                    {"role": "user", "content": f"Запрос: {prompt}\nТип: {report_type}\n\nДанные:\n{data_context}"}
+                ],
+                temperature=0.2,
+                max_tokens=4000, # Уменьшено для ускорения (хватит для отчёта)
+                response_format={"type": "json_object"},
+                timeout=120.0 # КРИТИЧНО: Увеличенный таймаут для долгих запросов
+            )
+            
+            raw_content = response.choices[0].message.content.strip()
+            if raw_content.startswith("```json"): raw_content = raw_content[7:-3].strip()
+            elif raw_content.startswith("```"): raw_content = raw_content[3:-3].strip()
+            
+            lexical_json = json.loads(raw_content)
+            
+        except Exception as e:
+            logger.error(f"LLM generation failed or timed out: {e}")
+            raise ValueError(f"Ошибка генерации отчёта: {str(e)}")
+
+        # 5. Создание страницы с отчётом
+        with transaction.atomic():
+            page = WikiPage.objects.create(
+                space_id=space_id,
+                title=f"Отчёт: {prompt[:30]}...",
+                content=lexical_json,
+                created_by_id=user_id,
+                updated_by_id=user_id
+            )
+            try:
+                sync_page_links(page)
+                sync_linked_entities(page)
+            except Exception as sync_err:
+                logger.warning(f"Report sync warning: {sync_err}")
+
+        cache.set(f"ai_task:{task_id}", {
+            "status": "completed",
+            "data": {"page_id": str(page.id), "title": page.title, "report_type": report_type}
+        }, timeout=TASK_RESULT_TTL)
+        
+        return {"status": "completed", "page_id": str(page.id)}
+
+    except requests.HTTPError as e:
+        error_msg = f"MWS API error: {e.response.status_code}"
+        cache.set(f"ai_task:{task_id}", {"status": "failed", "error": error_msg}, timeout=TASK_RESULT_TTL)
+        return {"error": error_msg}
+    except Exception as e:
+        logger.exception(f"Report generation failed: {e}")
+        cache.set(f"ai_task:{task_id}", {"status": "failed", "error": str(e)}, timeout=TASK_RESULT_TTL)
         return {"error": str(e)}

@@ -24,7 +24,8 @@ from apps.wiki.views.views_search import fulltext_search, search_users
 from apps.wiki.views.views_images import upload_media
 
 from apps.wiki.views.views_ai import (
-    AIEditTextView, AITableGenerateView, AITaskStatusView, AISmartImportView
+    AIEditTextView, AITableGenerateView, AITaskStatusView, AISmartImportView, 
+    AIReportGenerateView
 )
 
 urlpatterns = [
@@ -46,7 +47,8 @@ urlpatterns = [
     path("api/v1/ai/generate-table/", AITableGenerateView.as_view(), name="ai-generate-table"),
     path("api/v1/ai/edit-text/", AIEditTextView.as_view(), name="ai-edit-text"),
     path("api/v1/ai/tasks/<str:task_id>/", AITaskStatusView.as_view(), name="ai-task-status"),
-    path('api/v1/ai/smart-import/', AISmartImportView.as_view(), name='ai-smart-import')
+    path('api/v1/ai/smart-import/', AISmartImportView.as_view(), name='ai-smart-import'),
+    path('api/v1/ai/generate-report/', AIReportGenerateView.as_view(), name='ai-generate-report')
 
 ]
 

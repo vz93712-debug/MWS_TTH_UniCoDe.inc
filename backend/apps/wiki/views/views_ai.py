@@ -4,8 +4,8 @@ from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from django.core.cache import cache
 
-from apps.wiki.serializers.serializers_ai import SmartImportSerializer
-from apps.wiki.tasks import generate_table_task, edit_text_task, smart_import_task
+from apps.wiki.serializers.serializers_ai import SmartImportSerializer, ReportGenerationSerializer
+from apps.wiki.tasks import generate_table_task, edit_text_task, smart_import_task, generate_report_task
 from apps.wiki.services.mws_gpt import MWSGPTService
 
 from celery.result import AsyncResult
@@ -133,4 +133,31 @@ class AISmartImportView(APIView):
             "task_id": task.id,
             "status": "queued",
             "message": "Импорт запущен. Ожидайте завершения."
+        }, status=status.HTTP_202_ACCEPTED)
+    
+
+class AIReportGenerateView(APIView):
+    """
+    POST /api/v1/ai/generate-report/
+    Запускает асинхронную генерацию отчёта на основе данных таблицы MWS.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        serializer = ReportGenerationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        task = generate_report_task.delay(
+            user_id=request.user.id,
+            dst_id=serializer.validated_data['dst_id'],
+            space_id=serializer.validated_data['space_id'],
+            prompt=serializer.validated_data['prompt'],
+            limit=serializer.validated_data.get('limit', 100),
+            report_type=serializer.validated_data.get('report_type', 'summary')
+        )
+
+        return Response({
+            "task_id": task.id,
+            "status": "queued",
+            "message": "Генерация отчёта запущена. Данные запрашиваются из MWS Tables."
         }, status=status.HTTP_202_ACCEPTED)
