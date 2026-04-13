@@ -52,7 +52,7 @@ class WikiPage(BaseModel):
         return f'{self.space.name} {self.title}'
 
     def save(self, *args, **kwargs):
-        is_new = self.pk is None
+        is_new = self._state.adding
         
         # Автогенерация заголовка только при создании и если он пустой
         if is_new and not self.title:
