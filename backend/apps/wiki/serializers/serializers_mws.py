@@ -107,7 +107,7 @@ class DeleteRecordsQuerySerializer(serializers.Serializer):
     record_ids = serializers.ListField(
         child=serializers.CharField(), 
         required=True, 
-        source='recordIds',
+        # source='recordIds',
         help_text="Идентификаторы записей для удаления"
     )
 

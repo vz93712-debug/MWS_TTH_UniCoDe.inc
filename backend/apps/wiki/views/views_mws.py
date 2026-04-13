@@ -175,7 +175,7 @@ class MWSRecordsView(BaseMWSProxyView):
         return self.process_proxy(
             'DELETE', 
             f'/datasheets/{dst_id}/records',
-            query_serializer_class=DeleteRecordsQuerySerializer
+            serializer_class=DeleteRecordsQuerySerializer
         )
 
 # ============================================================================
@@ -223,7 +223,7 @@ class MWSViewsView(BaseMWSProxyView):
     GET /api/v1/mws/datasheets/{dst_id}/views/
     POST /api/v1/mws/spaces/{space_id}/datasheets/{dst_id}/views/
     """
-    def get(self, request, dst_id):
+    def get(self, request, space_id, dst_id):
         return self.process_proxy('GET', f'/datasheets/{dst_id}/views')
 
     def post(self, request, space_id, dst_id):

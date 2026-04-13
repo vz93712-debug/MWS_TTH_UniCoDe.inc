@@ -21,12 +21,13 @@ class MWSClient:
 
         headers = {
             "Authorization": f"Bearer {user.mws_api_token}",
-            "Content-Type": "application/json",
         }
         
-        # Для файлов заголовок Content-Type убираем (requests сам выставит boundary)
-        if kwargs.get('files'):
-            headers.pop("Content-Type")
+        # Добавляем Content-Type ТОЛЬКО если есть тело запроса
+        if method in ['POST', 'PATCH', 'PUT']:
+            # Для файлов заголовок Content-Type убираем (requests сам выставит boundary)
+            if not kwargs.get('files'):
+                headers["Content-Type"] = "application/json"
 
         full_url = f"{MWSClient.BASE_URL}{url_path}"
         

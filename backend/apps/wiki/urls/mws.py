@@ -15,7 +15,7 @@ urlpatterns = [
     # Spaces & Nodes
     path('spaces/', MWSSpacesView.as_view(), name='mws-spaces'),
     path('spaces/<str:space_id>/nodes/', MWSNodesView.as_view(), name='mws-nodes'),
-    path('mws/nodes/<str:node_id>/', MWSNodeDetailView.as_view(), name='mws-node-detail'),
+    path('nodes/<str:node_id>/', MWSNodeDetailView.as_view(), name='mws-node-detail'),
     
     # Datasheets
     path('spaces/<str:space_id>/datasheets/', MWSDatasheetCreateView.as_view(), name='mws-datasheet-create'),
@@ -31,10 +31,13 @@ urlpatterns = [
     path('datasheets/<str:dst_id>/views/<str:view_id>/fields/<str:field_id>/', MWSFieldIndexView.as_view(), name='mws-field-index'),
     
     # Views
-    path('datasheets/<str:dst_id>/views/', MWSViewsView.as_view(), name='mws-views'),
+    # path('datasheets/<str:dst_id>/views/', MWSViewsView.as_view(), name='mws-views'),
     path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/', MWSViewsView.as_view(), name='mws-views-create'), # POST handled inside
     path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/<str:view_id>/', MWSViewDetailView.as_view(), name='mws-view-detail'),
     path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/<str:view_id>/sort/', MWSViewSortView.as_view(), name='mws-view-sort'),
+    path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/<str:view_id>/group/', MWSViewGroupView.as_view(), name='mws-view-sort'),
+    path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/<str:view_id>/hidden/', MWSViewHiddenView.as_view(), name='mws-view-sort'),
+    path('spaces/<str:space_id>/datasheets/<str:dst_id>/views/<str:view_id>/move/', MWSViewMoveView.as_view(), name='mws-view-sort'),
     
     # Attachments
     path('datasheets/<str:dst_id>/attachments/', MWSAttachmentDownloadView.as_view(), name='mws-attachments'),
