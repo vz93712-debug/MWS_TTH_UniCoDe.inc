@@ -8,6 +8,7 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
 from environ import Env
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,9 +20,9 @@ Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool("DEBUG")
+DEBUG = env.bool("DEBUG", default=True)
 
-ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])  # type: ignore
+ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
@@ -39,7 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.postgres",
-    'django_celery_results',
+    "django_celery_results",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
@@ -86,11 +87,11 @@ ASGI_APPLICATION = "wikilive.asgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("DB_NAME"),
-        "USER": env("DB_USER"),
-        "PASSWORD": env("DB_PASSWORD"),
-        "HOST": env("DB_HOST"),
-        "PORT": env("DB_PORT"),
+        "NAME": env("DB_NAME", default="wikilive_db"),
+        "USER": env("DB_USER", default="postgres"),
+        "PASSWORD": env("DB_PASSWORD", default="postgres"),
+        "HOST": env("DB_HOST", default="127.0.0.1"),
+        "PORT": env("DB_PORT", default="5432"),
     }
 }
 
@@ -116,6 +117,20 @@ STATIC_ROOT = BASE_DIR / "static"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# JWT & AUTH
+AUTH_USER_MODEL = "users.User"
+
+SIMPLE_JWT = {
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
 
 # REST FRAMEWORK
 REST_FRAMEWORK = {
@@ -145,35 +160,15 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
-# JWT
-AUTH_USER_MODEL = "users.User"
-
-SIMPLE_JWT = {
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": True,
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    "AUTH_HEADER_TYPES": ("Bearer",),
-    "USER_ID_FIELD": "id",
-    "USER_ID_CLAIM": "user_id",
-}
-
 # CORS
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
 ]
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
+CORS_ALLOW_METHODS = ["DELETE", "GET", "OPTIONS", "PATCH", "POST", "PUT"]
 
 # LOGGING
 LOGGING = {
@@ -190,14 +185,9 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": BASE_DIR / "logs" / "wikilive.log",
-            "formatter": "verbose",
-        },
     },
     "root": {
-        "handlers": ["console", "file"],
+        "handlers": ["console"],
         "level": "INFO",
     },
     "loggers": {
@@ -207,85 +197,81 @@ LOGGING = {
             "propagate": False,
         },
         "wikilive": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "level": "DEBUG",
             "propagate": False,
         },
     },
 }
 
-# REDIS & CACHE
+# ==========================================
+# REDIS CONNECTION BASES
+# ==========================================
 REDIS_HOST = env("REDIS_HOST", default="127.0.0.1")
 REDIS_PORT = env("REDIS_PORT", default=6379)
-REDIS_DB_CACHE = env("REDIS_DB_CACHE", default=1)
-REDIS_DB_CELERY = env("REDIS_DB_CELERY", default=2)
 
-REDIS_URL_CACHE = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CACHE}"
-REDIS_URL_CELERY = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_CELERY}"
+REDIS_URL_CHANNELS = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+REDIS_URL_CACHE = f"redis://{REDIS_HOST}:{REDIS_PORT}/1"
+REDIS_URL_CELERY = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
 
+# ==========================================
+# CACHE
+# ==========================================
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": env("REDIS_URL_CACHE", default=REDIS_URL_CACHE),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            # Убираем автоматическое добавление версии (:1:) к ключам
             "IGNORE_EXCEPTIONS": True,
         },
-        # Оставляем префикс пустым, чтобы ключи были "как есть"
-        # Либо ставим короткий "wiki", если хотим порядка
         "KEY_PREFIX": "",
     }
 }
 
-
-# CELERY
-
-CELERY_BROKER_URL = env("REDIS_URL_CELERY", default=REDIS_URL_CELERY)
-CELERY_RESULT_BACKEND = env("REDIS_URL_CELERY", default=REDIS_URL_CELERY)
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = env("TIMEZONE", default="Europe/Moscow")
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут
-
-
+# ==========================================
 # CHANNELS & WEBSOCKETS
+# ==========================================
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [env("REDIS_URL_CHANNELS", default=REDIS_URL_CHANNELS)],
         },
     },
 }
 
+# ==========================================
+# CELERY & BEAT SCHEDULE
+# ==========================================
+CELERY_BROKER_URL = env("REDIS_URL_CELERY", default=REDIS_URL_CELERY)
+CELERY_RESULT_BACKEND = "django-db"  # Храним результаты в БД (django_celery_results)
+CELERY_CACHE_BACKEND = "default"
 
-# MWS GPT
+CELERY_ACCEPT_CONTENT = ["json", "application/json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут
 
-MWS_GPT_API_KEY = env("MWS_GPT_API_KEY")
-MWS_GPT_BASE_URL = env("MWS_GPT_BASE_URL")
-
-# CELERY SETTINGS
-from celery.schedules import crontab
-
-# Расписание фоновых задач (Celery Beat)
 CELERY_BEAT_SCHEDULE = {
-    # Каждую минуту опрашиваем MWS таблицы
     "poll-mws-tables-every-minute": {
         "task": "wiki.poll_mws_tables",
-        "schedule": crontab(minute="*"),  # Каждую минуту
+        "schedule": crontab(minute="*"),
     },
-    # Каждую ночь в 3:00 чистим старые версии страниц
     "cleanup-versions-daily": {
         "task": "wiki.cleanup_old_versions",
         "schedule": crontab(hour=3, minute=0),
     },
-    # Каждую ночь в 4:00 чистим мусор от AI-генераций
     "cleanup-ai-tasks-daily": {
         "task": "wiki.cleanup_ai_tasks",
         "schedule": crontab(hour=4, minute=0),
     },
 }
 
+# ==========================================
+# MWS GPT
+# ==========================================
+MWS_GPT_API_KEY = env("MWS_GPT_API_KEY", default="")
+MWS_GPT_BASE_URL = env("MWS_GPT_BASE_URL", default="")

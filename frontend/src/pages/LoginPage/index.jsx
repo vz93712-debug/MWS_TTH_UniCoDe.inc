@@ -1,26 +1,38 @@
 import { useState } from "react";
-import { Monitor } from "lucide-react";
+import { api } from "../../services/api";
 
 export function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMsg("");
 
-    // Эмуляция запроса к API для получения токена
-    setTimeout(() => {
-      console.log("Токен получен!");
-      onLogin(); // Передаем сигнал в App.jsx, что мы вошли
-    }, 800);
+    try {
+      // Реальный запрос к бэкенду
+      const data = await api.login(email, password);
+
+      // Сохраняем токены
+      localStorage.setItem("access_token", data.tokens.access);
+      localStorage.setItem("refresh_token", data.tokens.refresh);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      // Даем сигнал в App.jsx, что мы вошли
+      onLogin();
+    } catch (error) {
+      setErrorMsg(error.message || "Неверный логин или пароль");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen w-full bg-gray-50 flex items-center justify-center font-sans">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-xl border border-gray-100 p-10">
-        {/* Логотип */}
         <div className="flex flex-col items-center justify-center mb-10">
           <div className="w-14 h-14 bg-[#FF0032] rounded-2xl text-white flex items-center justify-center font-wide font-bold text-2xl shadow-lg mb-4">
             W
@@ -29,23 +41,28 @@ export function LoginPage({ onLogin }) {
             WikiLive
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Войдите для доступа к MWS Таблицам
+            Войдите для доступа к системе
           </p>
         </div>
 
-        {/* Форма */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {errorMsg && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100 text-center font-medium">
+              {errorMsg}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">
-              Email или Логин
+              Email
             </label>
             <input
-              type="text"
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:border-[#FF0032] focus:ring-1 focus:ring-[#FF0032] transition-colors"
-              placeholder="name@mws.ru"
+              placeholder="admin@admin.com"
             />
           </div>
 
