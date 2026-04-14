@@ -1,20 +1,27 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback } from "react";
+import { api } from "../../services/api";
+import { useDebounce } from "../../hooks/useDebounce"; // Подключаем наш новый хук
 
 export function AutoSavePlugin({ pageId }) {
   const [editor] = useLexicalComposerContext();
-  const timeoutRef = useRef(null);
 
+  // Логика сохранения в БД
   const saveToBackend = useCallback(
-    (jsonState) => {
-      // В будущем здесь будет реальный axios.put('/api/pages/...')
-      console.log(
-        `🚀 [Фоновый PUSH] Сохранено в БД (Mock) для страницы ${pageId}:`,
-        jsonState,
-      );
+    async (jsonState) => {
+      if (!pageId) return;
+      try {
+        await api.updatePage(pageId, jsonState);
+        console.log(`[AutoSave] Страница ${pageId} сохранена.`);
+      } catch (error) {
+        console.error(`[AutoSave] Ошибка:`, error);
+      }
     },
     [pageId],
   );
+
+  // Оборачиваем сохранение в наш красивый хук (задержка 2 секунды)
+  const debouncedSave = useDebounce(saveToBackend, 2000);
 
   useEffect(() => {
     const removeListener = editor.registerUpdateListener(
@@ -23,22 +30,16 @@ export function AutoSavePlugin({ pageId }) {
 
         editorState.read(() => {
           const json = editorState.toJSON();
-
           localStorage.setItem(`wikilive_page_${pageId}`, JSON.stringify(json));
 
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = setTimeout(() => {
-            saveToBackend(json);
-          }, 2000);
+          // Вызываем дебаунс-функцию
+          debouncedSave(json);
         });
       },
     );
 
-    return () => {
-      removeListener();
-      clearTimeout(timeoutRef.current);
-    };
-  }, [editor, pageId, saveToBackend]);
+    return () => removeListener();
+  }, [editor, pageId, debouncedSave]);
 
   return null;
 }

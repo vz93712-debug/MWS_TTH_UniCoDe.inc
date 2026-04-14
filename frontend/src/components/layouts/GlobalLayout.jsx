@@ -1,15 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "../../services/api"; // Подключаем наш API клиент
 import { ShareModal } from "../blocks/Modals/ShareModal";
 import {
   Search,
   Monitor,
   Bookmark,
   Globe,
-  Trash2,
-  GraduationCap,
   Settings,
-  Bell,
-  HelpCircle,
   Plus,
   Upload,
   Link2,
@@ -19,70 +16,142 @@ import {
   Folder,
   FileText,
 } from "lucide-react";
-
-// Уникальные ID для новых файлов
-let nextId = 100;
-
-const INITIAL_FILE_TREE = [
-  {
-    id: "f1",
-    name: "Проекты 2026",
-    type: "folder",
-    isOpen: true,
-    children: [
-      { id: "doc1", name: "Архитектура WikiLive", type: "file" },
-      { id: "doc2", name: "Roadmap Q2", type: "file" },
-    ],
-  },
-  { id: "doc4", name: "Черновик", type: "file" },
-];
-
+// Добавь в импорты
+import { CommandPalette } from "../blocks/Modals/CommandPalette";
 export function GlobalLayout({ children }) {
-  const [fileTree, setFileTree] = useState(INITIAL_FILE_TREE);
-
+  // === СТЕЙТЫ ДЛЯ РЕАЛЬНЫХ ДАННЫХ ===
+  const [fileTree, setFileTree] = useState([]);
+  const [currentSpaceId, setCurrentSpaceId] = useState(null);
+  const [isTreeLoading, setIsTreeLoading] = useState(true);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  // === СТЕЙТЫ UI ===
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
+  // === ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ===
+  useEffect(() => {
+    const fetchTree = async () => {
+      setIsTreeLoading(true);
+      try {
+        const spaces = await api.getSpaces();
+
+        if (spaces && spaces.length > 0) {
+          const spaceId = spaces[0].id;
+          setCurrentSpaceId(spaceId);
+
+          const pagesTree = await api.getPagesTree(spaceId);
+
+          // Рекурсивный адаптер для нашего UI
+          const formatNode = (node) => ({
+            id: node.id,
+            name: node.title || "Без названия",
+            // Если есть вложенные страницы — делаем папкой
+            type: node.children && node.children.length > 0 ? "folder" : "file",
+            isOpen: false,
+            children: node.children ? node.children.map(formatNode) : [],
+          });
+
+          setFileTree(pagesTree.map(formatNode));
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки проводника:", error);
+      } finally {
+        setIsTreeLoading(false);
+      }
+    };
+
+    fetchTree();
+  }, []);
+
   const toggleFolder = (folderId) => {
-    setFileTree((tree) =>
-      tree.map((node) =>
-        node.id === folderId ? { ...node, isOpen: !node.isOpen } : node,
-      ),
-    );
+    // Рекурсивная функция для открытия/закрытия папок на любом уровне
+    const toggleNode = (nodes) =>
+      nodes.map((node) => {
+        if (node.id === folderId) return { ...node, isOpen: !node.isOpen };
+        if (node.children)
+          return { ...node, children: toggleNode(node.children) };
+        return node;
+      });
+    setFileTree(toggleNode(fileTree));
   };
 
-  // ФУНКЦИИ СОЗДАНИЯ
-  const handleCreateFile = () => {
-    const newFile = {
-      id: `doc_${nextId++}`,
-      name: "Новая страница",
-      type: "file",
-    };
-    setFileTree([...fileTree, newFile]);
-    setIsCreateOpen(false);
+  // === СОЗДАНИЕ РЕАЛЬНОЙ СТРАНИЦЫ ===
+  const handleCreateFile = async () => {
+    if (!currentSpaceId) return;
+
+    try {
+      const emptyLexicalState = {
+        root: {
+          children: [
+            {
+              children: [],
+              direction: null,
+              format: "",
+              indent: 0,
+              type: "paragraph",
+              version: 1,
+            },
+          ],
+          direction: null,
+          format: "",
+          indent: 0,
+          type: "root",
+          version: 1,
+        },
+      };
+
+      const newPage = await api.createPage(currentSpaceId, {
+        title: "Новая страница",
+        content: emptyLexicalState,
+      });
+
+      const formattedNewPage = {
+        id: newPage.id,
+        name: newPage.title,
+        type: "file",
+        isOpen: false,
+        children: [],
+      };
+
+      setFileTree([...fileTree, formattedNewPage]);
+      setIsCreateOpen(false);
+
+      // TODO: Прикрутить react-router для перехода на: /pages/${newPage.id}
+    } catch (error) {
+      console.error("Ошибка при создании страницы:", error);
+    }
   };
 
   const handleCreateFolder = () => {
-    const newFolder = {
-      id: `f_${nextId++}`,
-      name: "Новая папка",
-      type: "folder",
-      isOpen: true,
-      children: [],
-    };
-    setFileTree([...fileTree, newFolder]);
+    alert(
+      "Для хакатона папки создаются автоматически, если перетащить страницу внутрь другой страницы (в разработке)",
+    );
     setIsCreateOpen(false);
   };
 
+  // Глобальный слушатель для Cmd+K (Mac) или Ctrl+K (Win)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   return (
     <div className="flex h-screen w-full bg-white text-[#19191C] font-sans overflow-hidden">
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
       />
-
-      {/* ================= 1. УЗКАЯ ПАНЕЛЬ НАВИГАЦИИ (z-20) ================= */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+      />
+      {/* 1. УЗКАЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <aside className="w-14 flex flex-col items-center py-3 border-r border-gray-200 bg-white shrink-0 z-20 justify-between shadow-[1px_0_4px_rgba(0,0,0,0.02)] relative">
         <div className="flex flex-col items-center gap-5 w-full">
           <button className="w-8 h-8 bg-[#FF0032] rounded-lg text-white flex items-center justify-center font-wide font-bold text-sm mb-2 hover:bg-[#CC0028] shadow-sm">
@@ -111,13 +180,9 @@ export function GlobalLayout({ children }) {
         </div>
       </aside>
 
-      {/* ================= 2. ПАНЕЛЬ ПРОСТРАНСТВА (z-10) ================= */}
+      {/* 2. ПАНЕЛЬ ПРОСТРАНСТВА */}
       <aside
-        className={`border-r border-gray-200 flex flex-col bg-gray-50/50 shrink-0 z-10 justify-between transition-all duration-300 ease-in-out ${
-          isSidebarOpen
-            ? "w-[280px] opacity-100"
-            : "w-0 opacity-0 overflow-hidden border-none"
-        }`}
+        className={`border-r border-gray-200 flex flex-col bg-gray-50/50 shrink-0 z-10 justify-between transition-all duration-300 ease-in-out ${isSidebarOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden border-none"}`}
       >
         <div className="flex-1 flex flex-col overflow-hidden min-w-[280px]">
           <div className="h-14 flex items-center justify-between px-4 shrink-0 mt-2">
@@ -141,59 +206,73 @@ export function GlobalLayout({ children }) {
             <div className="text-[11px] font-wide font-bold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-2">
               Проводник
             </div>
+
             <div className="space-y-0.5">
-              {fileTree.map((node) => (
-                <div key={node.id}>
-                  {node.type === "folder" ? (
-                    <>
-                      <button
-                        onClick={() => toggleFolder(node.id)}
-                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors"
-                      >
-                        {node.isOpen ? (
-                          <ChevronDown
-                            size={14}
-                            className="text-gray-400 shrink-0"
-                          />
-                        ) : (
-                          <ChevronRight
-                            size={14}
-                            className="text-gray-400 shrink-0"
-                          />
-                        )}
-                        <Folder size={16} className="text-gray-400 shrink-0" />
-                        <span className="font-medium truncate">
-                          {node.name}
-                        </span>
-                      </button>
-                      {node.isOpen && (
-                        <div className="ml-6 border-l border-gray-200 pl-1 mt-0.5 space-y-0.5">
-                          {node.children.map((child) => (
-                            <button
-                              key={child.id}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group"
-                            >
-                              <FileText
-                                size={14}
-                                className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
-                              />
-                              <span className="truncate">{child.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors ml-4 group">
-                      <FileText
-                        size={14}
-                        className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
-                      />
-                      <span className="truncate">{node.name}</span>
-                    </button>
-                  )}
+              {isTreeLoading ? (
+                <div className="px-4 py-2 text-sm text-gray-400">
+                  Загрузка структуры...
                 </div>
-              ))}
+              ) : fileTree.length === 0 ? (
+                <div className="px-4 py-2 text-sm text-gray-400">
+                  Нет страниц
+                </div>
+              ) : (
+                fileTree.map((node) => (
+                  <div key={node.id}>
+                    {node.type === "folder" ? (
+                      <>
+                        <button
+                          onClick={() => toggleFolder(node.id)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors"
+                        >
+                          {node.isOpen ? (
+                            <ChevronDown
+                              size={14}
+                              className="text-gray-400 shrink-0"
+                            />
+                          ) : (
+                            <ChevronRight
+                              size={14}
+                              className="text-gray-400 shrink-0"
+                            />
+                          )}
+                          <Folder
+                            size={16}
+                            className="text-gray-400 shrink-0"
+                          />
+                          <span className="font-medium truncate">
+                            {node.name}
+                          </span>
+                        </button>
+                        {node.isOpen && (
+                          <div className="ml-6 border-l border-gray-200 pl-1 mt-0.5 space-y-0.5">
+                            {node.children.map((child) => (
+                              <button
+                                key={child.id}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group"
+                              >
+                                <FileText
+                                  size={14}
+                                  className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
+                                />
+                                <span className="truncate">{child.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors ml-4 group">
+                        <FileText
+                          size={14}
+                          className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
+                        />
+                        <span className="truncate">{node.name}</span>
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -239,9 +318,8 @@ export function GlobalLayout({ children }) {
         </div>
       </aside>
 
-      {/* ================= 3. ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ (z-30) ================= */}
+      {/* 3. ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ */}
       <main className="flex-1 flex flex-col min-w-0 bg-white relative z-30 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
-        {/* Кнопка скрытия/показа сайдбара */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="absolute -left-3.5 top-4 w-7 h-7 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-500 hover:text-[#FF0032] hover:border-[#FF0032] hover:bg-[#FFEBED] shadow-md z-50 transition-all cursor-pointer"
@@ -253,7 +331,6 @@ export function GlobalLayout({ children }) {
           )}
         </button>
 
-        {/* ВЕРХНЯЯ ПАНЕЛЬ (Top Bar) */}
         <header className="h-14 border-b border-gray-200 flex items-center justify-between px-8 shrink-0 transition-all">
           <div className="flex items-center text-[13px] text-gray-500 ml-2">
             <span className="hover:text-gray-900 cursor-pointer transition-colors">
@@ -279,21 +356,21 @@ export function GlobalLayout({ children }) {
               </div>
             </div>
 
-            {/* ВЫЗОВ МОДАЛКИ ДОСТУПОВ */}
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="bg-[#FF0032] hover:bg-[#CC0028] text-white text-[13px] font-wide font-bold px-4 py-1.5 rounded-lg transition-colors shadow-sm"
             >
               Поделиться
             </button>
-
-            <button className="text-gray-400 hover:text-[#FF0032] bg-gray-50 hover:bg-[#FFEBED] p-1.5 rounded-lg transition-colors">
-              <Link2 size={18} strokeWidth={2} />
+            <button
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="text-gray-400 hover:text-[#FF0032] transition-colors"
+            >
+              <Search size={20} />
             </button>
           </div>
         </header>
 
-        {/* КОНТЕЙНЕР ДЛЯ РЕДАКТОРА */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {children}
         </div>

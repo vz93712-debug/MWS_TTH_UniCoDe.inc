@@ -70,4 +70,17 @@ export const api = {
     }),
 
   checkTaskStatus: (taskId) => request(`/ai/tasks/${taskId}/`),
+
+  // === 5. СОХРАНЕНИЕ СТРАНИЦЫ (AutoSave) ===
+  updatePage: (pageId, content) =>
+    request(`/pages/${pageId}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ content }),
+    }),
+
+  // === 6. ИСТОРИЯ ВЕРСИЙ (СКВ - Машина Времени) ===
+  getPageVersions: (pageId) => request(`/pages/${pageId}/versions/`),
+
+  getVersionDetail: (pageId, versionId) =>
+    request(`/pages/${pageId}/versions/${versionId}/`),
 };

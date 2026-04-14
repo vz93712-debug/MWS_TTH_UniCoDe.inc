@@ -137,3 +137,50 @@
     color: #9ca3af;
     text-decoration: line-through;
 }
+
+/* =========================================================
+   СТИЛИ ДЛЯ МУЛЬТИПЛЕЕРА (Figma-style Cursors)
+   ========================================================= */
+
+/* Блок, который показывает имя пользователя над курсором */
+.yRemoteSelectionHead {
+    position: absolute;
+    border-left: 2px solid;
+    border-top: 2px solid;
+    border-bottom: 2px solid;
+    height: 100%;
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+/* Флажок с именем юзера */
+.yRemoteSelectionHead::after {
+    content: attr(data-yjs-name); /* Берет имя из awareness */
+    position: absolute;
+    top: -1.5em; /* Поднимаем имя над курсором */
+    left: -2px;
+    background-color: inherit; /* Цвет подтянется автоматически */
+    color: #fff;
+    font-family: sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border-bottom-left-radius: 0; /* Острый уголок как в Figma */
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: opacity 0.2s ease-in-out;
+    opacity: 1;
+}
+
+/* Скрываем флажок, если курсор не двигается (опционально) */
+.yRemoteSelectionHead.fade::after {
+    opacity: 0;
+}
+
+/* Подсветка текста, который прямо сейчас выделен другим пользователем */
+.yRemoteSelection {
+    background-color: inherit;
+    opacity: 0.2; /* Делаем цвет полупрозрачным */
+}
