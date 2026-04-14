@@ -27,6 +27,8 @@ from apps.wiki.views.views_ai import (
     AIEditTextView, AITableGenerateView, AITaskStatusView, AISmartImportView, 
     AIReportGenerateView, AISummarizePageView, AIDiffExplainView
 )
+from apps.wiki.views.views_ai import AIChatView, AIChatHistoryView, AIChatSessionsView
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -51,6 +53,11 @@ urlpatterns = [
     path('api/v1/ai/generate-report/', AIReportGenerateView.as_view(), name='ai-generate-report'),
     path("api/v1/ai/summarize-page/", AISummarizePageView.as_view(), name="ai-summarize-page"),
     path("api/v1/ai/explain-diff/", AIDiffExplainView.as_view(), name="ai-explain-diff"),
+
+    path("api/v1/ai/chat/", AIChatView.as_view(), name="ai-chat"),
+    path("api/v1/ai/chat/history/<str:session_id>/", AIChatHistoryView.as_view(), name="ai-chat-history"),
+    path("api/v1/ai/chat/sessions/", AIChatSessionsView.as_view(), name="ai-chat-sessions"),
+    path("api/v1/ai/chat/sessions/<str:session_id>/", AIChatSessionsView.as_view(), name="ai-chat-session-delete"),
 
 
 ]

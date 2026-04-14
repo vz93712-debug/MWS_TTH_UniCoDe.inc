@@ -212,3 +212,133 @@ class AIDiffExplainView(APIView):
             "message": "Анализ изменений запущен."
         }, status=status.HTTP_202_ACCEPTED)
 
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from rest_framework.decorators import api_view, permission_classes
+from ..serializers.serializers_ai import (
+    AIChatRequestSerializer, 
+    AIChatResponseSerializer,
+    AIChatHistorySerializer
+)
+from ..tasks import ai_chat_process_task
+from django.core.cache import cache
+import json
+
+
+class AIChatView(APIView):
+    """
+    POST /api/v1/ai/chat/
+    
+    AI-чат для работы с документами.
+    Поддерживает контекст страницы и историю диалога.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = AIChatRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Запускаем асинхронную задачу
+        task = ai_chat_process_task.delay(
+            user_id=request.user.id,
+            page_id=serializer.validated_data.get('page_id'),
+            message=serializer.validated_data['message'],
+            session_id=serializer.validated_data.get('session_id'),
+            include_space_context=serializer.validated_data.get('include_space_context', False)
+        )
+        
+        # Для чата лучше использовать синхронный ответ (ждем 5-10 сек)
+        # Или можно вернуть task_id и polling, но это хуже UX
+        result = task.get(timeout=30)  # Ждем максимум 30 секунд
+        
+        response_serializer = AIChatResponseSerializer(result)
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+
+class AIChatHistoryView(APIView):
+    """
+    GET /api/v1/ai/chat/history/{session_id}/
+    
+    Получение истории сессии чата.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, session_id):
+        cache_key = f"chat_session:{session_id}"
+        session_data = cache.get(cache_key)
+        
+        if not session_data:
+            return Response(
+                {"error": "Session not found or expired"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        data = json.loads(session_data)
+        
+        # Проверяем, что сессия принадлежит пользователю
+        # (session_id содержит user_id)
+        if str(request.user.id) not in session_id:
+            return Response(
+                {"error": "Access denied"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        return Response({
+            "session_id": session_id,
+            "messages": data.get("messages", []),
+            "page_id": data.get("page_id"),
+            "last_activity": data.get("last_activity")
+        })
+
+
+class AIChatSessionsView(APIView):
+    """
+    GET /api/v1/ai/chat/sessions/
+    DELETE /api/v1/ai/chat/sessions/{session_id}/
+    
+    Управление сессиями чата.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Получаем все активные сессии пользователя
+        pattern = f"chat_session:{request.user.id}*"
+        keys = cache.keys(pattern)
+        
+        sessions = []
+        for key in keys:
+            session_id = key.replace("chat_session:", "")
+            data = cache.get(key)
+            if data:
+                session_data = json.loads(data)
+                sessions.append({
+                    "session_id": session_id,
+                    "last_activity": session_data.get("last_activity"),
+                    "message_count": len(session_data.get("messages", [])),
+                    "page_id": session_data.get("page_id")
+                })
+        
+        # Сортируем по last_activity
+        sessions.sort(key=lambda x: x["last_activity"], reverse=True)
+        
+        return Response({"sessions": sessions})
+    
+    def delete(self, request, session_id=None):
+        if session_id:
+            # Удаляем конкретную сессию
+            cache_key = f"chat_session:{session_id}"
+            if cache.delete(cache_key):
+                return Response({"status": "deleted"})
+            else:
+                return Response(
+                    {"error": "Session not found"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # Удаляем все сессии пользователя
+            pattern = f"chat_session:{request.user.id}*"
+            keys = cache.keys(pattern)
+            cache.delete_many(keys)
+            return Response({"status": "all_deleted", "count": len(keys)})

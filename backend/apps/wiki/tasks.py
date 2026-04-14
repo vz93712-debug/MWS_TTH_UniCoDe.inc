@@ -526,3 +526,131 @@ def explain_diff_task(
         err = {"status": "failed", "error": str(e)}
         cache.set(f"ai_task:{task_id}", err, timeout=TASK_RESULT_TTL)
         return err
+
+
+CHAT_SESSION_TTL = 7200  # 2 часа
+import time 
+
+@shared_task(bind=True, name="wiki.ai_chat_process")
+def ai_chat_process_task(self, user_id: int, page_id: str = None, message: str = "", 
+                          session_id: str = None, include_space_context: bool = False):
+    """
+    Обработка сообщения в AI-чате.
+    """
+    start_time = time.time()
+    
+    try:
+        # 1. Генерируем или используем существующий session_id
+        if not session_id:
+            import uuid
+            session_id = f"chat_{user_id}_{uuid.uuid4().hex[:8]}"
+        
+        cache_key = f"chat_session:{session_id}"
+        
+        # 2. Загружаем историю из Redis
+        session_data = cache.get(cache_key)
+        if session_data:
+            messages_history = json.loads(session_data).get("messages", [])
+        else:
+            messages_history = []
+        
+        # 3. Собираем контекст страницы
+        page_context = ""
+        page_title = ""
+        if page_id:
+            try:
+                page = WikiPage.objects.get(id=page_id)
+                page_text = extract_text_from_lexical(page.content)[:3000]
+                page_title = page.title
+                page_context = f"\n\nКОНТЕКСТ СТРАНИЦЫ: '{page.title}'\n{page_text}"
+                
+                # Добавляем связанные страницы
+                outgoing = page.outgoing_links.all()[:3]
+                if outgoing:
+                    links_text = ", ".join([p.title for p in outgoing])
+                    page_context += f"\n\nСВЯЗАННЫЕ СТРАНИЦЫ: {links_text}"
+            except WikiPage.DoesNotExist:
+                pass
+        
+        # 4. Собираем контекст пространства (если запрошено)
+        space_context = ""
+        if include_space_context and page_id:
+            try:
+                page = WikiPage.objects.get(id=page_id)
+                space_pages = WikiPage.objects.filter(space=page.space).exclude(id=page_id)[:10]
+                if space_pages:
+                    pages_list = "\n".join([f"- {p.title}" for p in space_pages])
+                    space_context = f"\n\nДРУГИЕ СТРАНИЦЫ В ПРОСТРАНСТВЕ '{page.space.name}':\n{pages_list}"
+            except:
+                pass
+        
+        # 5. Формируем системный промпт
+        system_prompt = f"""Ты — AI-помощник WikiLive, экспертной системы управления знаниями.
+Твоя задача — помогать пользователям работать с документами и таблицами.
+
+{page_context}
+{space_context}
+
+ПРАВИЛА:
+1. Отвечай на русском языке
+2. Будь конкретен и полезен
+3. Если вопрос про страницу — используй контекст выше
+4. Если не знаешь ответа — честно скажи об этом
+5. Предлагай полезные действия (создать страницу, таблицу, найти информацию)
+
+Отвечай кратко, но информативно."""
+        
+        # 6. Добавляем текущее сообщение в историю
+        messages_history.append({"role": "user", "content": message})
+        
+        # 7. Вызов LLM
+        ai_response = client.chat.completions.create(
+            model=MWSGPTService.MODEL_INSTRUCT,
+            messages=[
+                {"role": "system", "content": system_prompt},
+            ] + messages_history[-10:],  # Последние 10 сообщений для контекста
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        assistant_message = ai_response.choices[0].message.content.strip()
+        
+        # 8. Сохраняем ответ в историю
+        messages_history.append({"role": "assistant", "content": assistant_message})
+        
+        # 9. Сохраняем сессию в Redis
+        cache.set(cache_key, json.dumps({
+            "messages": messages_history[-20:],  # Храним последние 20 сообщений
+            "page_id": str(page_id) if page_id else None,  # ← КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ
+            "last_activity": time.time()
+        }), timeout=CHAT_SESSION_TTL)
+        
+        # 10. Собираем источники
+        sources = []
+        if page_id:
+            sources.append({
+                "type": "page",
+                "id": page_id,
+                "title": page_title
+            })
+        
+        latency_ms = int((time.time() - start_time) * 1000)
+        
+        return {
+            "session_id": session_id,
+            "response": assistant_message,
+            "sources": sources,
+            "latency_ms": latency_ms
+        }
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception(f"AI chat error: {e}")
+        return {
+            "error": str(e),
+            "session_id": session_id or "unknown",
+            "response": "Произошла ошибка при обработке запроса. Попробуйте позже.",
+            "sources": [],
+            "latency_ms": int((time.time() - start_time) * 1000)
+        }
