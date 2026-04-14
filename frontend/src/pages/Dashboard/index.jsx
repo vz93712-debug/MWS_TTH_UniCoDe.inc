@@ -1,90 +1,112 @@
-import { 
-  Plus, LayoutTemplate, Upload, FileText, 
-  MoreHorizontal, Clock, Table as TableIcon 
-} from 'lucide-react';
+import {
+  Plus,
+  LayoutTemplate,
+  Upload,
+  FileText,
+  MoreHorizontal,
+  Clock,
+  Table as TableIcon,
+} from "lucide-react";
 
-// Моковые данные для сетки документов
 const RECENT_DOCS = [
-  { id: 1, title: 'Архитектура MWS API', type: 'page', time: 'Открыто 2ч назад', icon: FileText },
-  { id: 2, title: 'План запуска Q3', type: 'table', time: 'Открыто 4ч назад', icon: TableIcon },
-  { id: 3, title: 'Заметки с хакатона', type: 'page', time: 'Вчера', icon: FileText },
-  { id: 4, title: 'Бюджет маркетинга', type: 'table', time: 'Вчера', icon: TableIcon },
+  {
+    id: 1,
+    title: "Архитектура MWS API",
+    type: "page",
+    time: "Открыто 2ч назад",
+    icon: FileText,
+  },
+  {
+    id: 2,
+    title: "План запуска Q3",
+    type: "table",
+    time: "Открыто 4ч назад",
+    icon: TableIcon,
+  },
 ];
 
-export function Dashboard() {
+export function Dashboard({ onNavigate }) {
   return (
     <div className="max-w-5xl mx-auto py-12 px-8 font-sans text-[#19191C]">
-      
-      {/* 1. Шапка (Hero Section) */}
       <div className="mb-10">
-        <h1 className="text-3xl font-bold mb-2">Доброе утро, Команда ☀️</h1>
-        <p className="text-gray-500 flex items-center gap-2 text-sm">
-          <Clock size={16} /> Сегодня, 11 апреля
+        <h1 className="text-4xl font-wide font-bold mb-2">
+          Доброе утро, Команда ☀️
+        </h1>
+        <p className="text-gray-500 flex items-center gap-2 text-sm font-medium">
+          <Clock size={16} /> Сегодня, 14 апреля
         </p>
       </div>
 
-      {/* 2. Быстрые действия (Quick Actions) */}
       <div className="mb-12">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Быстрые действия</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          <button className="flex flex-col items-center justify-center gap-3 p-6 bg-white border border-gray-200 rounded-xl hover:border-[#E33A3A] hover:shadow-[0_4px_20px_-4px_rgba(227,58,58,0.1)] transition-all group">
-            <div className="w-12 h-12 bg-red-50 text-[#E33A3A] rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Plus size={24} />
+        <h2 className="text-[11px] font-wide font-bold text-gray-400 uppercase tracking-widest mb-6">
+          Быстрые действия
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <button
+            onClick={() => onNavigate("editor")}
+            className="flex flex-col items-center justify-center gap-4 p-8 bg-white border border-gray-200 rounded-2xl hover:border-[#FF0032] hover:shadow-xl hover:shadow-red-500/5 transition-all group"
+          >
+            <div className="w-14 h-14 bg-[#FFEBED] text-[#FF0032] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Plus size={28} strokeWidth={2.5} />
             </div>
-            <span className="font-medium text-sm text-gray-900">Создать пустую страницу</span>
+            <span className="font-wide font-bold text-sm">
+              Создать страницу
+            </span>
           </button>
 
-          <button className="flex flex-col items-center justify-center gap-3 p-6 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all group">
-            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <LayoutTemplate size={24} />
+          <button className="flex flex-col items-center justify-center gap-4 p-8 bg-white border border-gray-200 rounded-2xl hover:border-gray-400 transition-all group">
+            <div className="w-14 h-14 bg-gray-50 text-gray-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <LayoutTemplate size={28} />
             </div>
-            <span className="font-medium text-sm text-gray-900">Создать из шаблона</span>
+            <span className="font-wide font-bold text-sm">Из шаблона</span>
           </button>
 
-          <button className="flex flex-col items-center justify-center gap-3 p-6 bg-white border border-gray-200 rounded-xl hover:border-gray-400 hover:shadow-md transition-all group">
-            <div className="w-12 h-12 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Upload size={24} />
+          <button className="flex flex-col items-center justify-center gap-4 p-8 bg-white border border-gray-200 rounded-2xl hover:border-gray-400 transition-all group">
+            <div className="w-14 h-14 bg-gray-50 text-gray-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Upload size={28} />
             </div>
-            <span className="font-medium text-sm text-gray-900">Импорт файла</span>
+            <span className="font-wide font-bold text-sm">Импорт файла</span>
           </button>
-
         </div>
       </div>
 
-      {/* 3. Блок "Недавно просмотренные" */}
       <div>
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Недавно просмотренные</h2>
+        <h2 className="text-[11px] font-wide font-bold text-gray-400 uppercase tracking-widest mb-6">
+          Недавно просмотренные
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {RECENT_DOCS.map(doc => (
-            <div key={doc.id} className="group cursor-pointer">
-              
-              {/* Превью документа */}
-              <div className="h-32 bg-gray-50 border border-gray-200 rounded-xl mb-3 relative overflow-hidden group-hover:border-gray-300 group-hover:shadow-sm transition-all">
-                <div className="absolute inset-4 bg-white rounded border border-gray-200 opacity-60 shadow-sm"></div>
-                
-                {/* Кнопка "Три точки" появляется только при ховере */}
-                <button className="absolute top-2 right-2 p-1.5 bg-white border border-gray-200 rounded shadow-sm opacity-0 group-hover:opacity-100 hover:bg-gray-50 transition-all z-10">
-                  <MoreHorizontal size={16} className="text-gray-600" />
+          {RECENT_DOCS.map((doc) => (
+            <div
+              key={doc.id}
+              className="group cursor-pointer"
+              onClick={() => onNavigate("editor")}
+            >
+              <div className="h-40 bg-gray-50 border border-gray-200 rounded-2xl mb-4 relative overflow-hidden group-hover:border-[#FF0032]/30 transition-all">
+                <div className="absolute inset-5 bg-white rounded-lg border border-gray-100 shadow-sm opacity-60"></div>
+                <button className="absolute top-3 right-3 p-2 bg-white border border-gray-100 rounded-xl shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10">
+                  <MoreHorizontal size={16} />
                 </button>
               </div>
-              
-              {/* Инфо о документе */}
-              <div className="flex items-start gap-2 px-1">
-                <div className="mt-0.5">
-                  <doc.icon size={16} className={doc.type === 'table' ? 'text-indigo-500' : 'text-gray-400'} />
-                </div>
+              <div className="flex items-start gap-3 px-1">
+                <doc.icon
+                  size={18}
+                  className={
+                    doc.type === "table" ? "text-[#FF0032]" : "text-gray-400"
+                  }
+                />
                 <div>
-                  <h3 className="font-medium text-sm text-gray-900 line-clamp-1">{doc.title}</h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5">{doc.time}</p>
+                  <h3 className="font-bold text-sm text-gray-900 leading-none">
+                    {doc.title}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 mt-1.5 font-medium">
+                    {doc.time}
+                  </p>
                 </div>
               </div>
-
             </div>
           ))}
         </div>
       </div>
-
     </div>
   );
 }

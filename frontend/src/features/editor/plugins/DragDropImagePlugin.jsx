@@ -7,11 +7,11 @@ import {
   $getNodeByKey,
 } from "lexical";
 import { $createImageNode } from "../nodes/ImageNode";
+
 export function DragDropImagePlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    // Регистрируем слушатель события DROP (когда пользователь бросил файл)
     return editor.registerCommand(
       DROP_COMMAND,
       (event) => {
@@ -19,36 +19,32 @@ export function DragDropImagePlugin() {
         if (files && files.length > 0) {
           const file = files[0];
 
-          // Проверяем, что это картинка
           if (!file.type.startsWith("image/")) return false;
-
           event.preventDefault();
 
-          // 1. Создаем узел в состоянии "loading" и вставляем в документ
           let imageNodeKey;
           editor.update(() => {
             const imageNode = $createImageNode("loading", file.name);
             $insertNodes([imageNode]);
-            imageNodeKey = imageNode.getKey(); // Запоминаем ключ, чтобы потом обновить этот конкретный узел
+            imageNodeKey = imageNode.getKey();
           });
 
-          // 2. Имитируем загрузку на бэкенд (2 секунды)
+          // ⚠️ ВАЖНО ДЛЯ YJS:
+          // При переходе на мультиплеер URL.createObjectURL(file) вызовет рассинхрон,
+          // так как blob-ссылка работает только локально.
+          // Здесь нужно будет сделать formData.append('file', file)
+          // и отправить реальный POST-запрос на Django, а в setSrc() передать вернувшийся публичный URL.
           setTimeout(() => {
-            // В реальности тут будет URL ответа от Django (S3 / MWS Object Storage)
-            // Для локального теста мы просто создаем временную ссылку в памяти браузера
             const localPreviewUrl = URL.createObjectURL(file);
-
-            // Стало (правильный Lexical-путь)
             editor.update(() => {
               const node = $getNodeByKey(imageNodeKey);
               if (node) {
                 node.setSrc(localPreviewUrl);
               }
             });
-            console.log("✅ Файл успешно загружен на MWS-сервер (mock)");
           }, 2000);
 
-          return true; // Команда перехвачена, стандартное поведение браузера отменяется
+          return true;
         }
         return false;
       },

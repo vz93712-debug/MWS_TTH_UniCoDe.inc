@@ -1,140 +1,150 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { useCallback, useEffect, useState } from "react";
 import {
-  LexicalTypeaheadMenuPlugin,
-  MenuOption,
-} from "@lexical/react/LexicalTypeaheadMenuPlugin";
-import { $createHeadingNode, $createQuoteNode } from "@lexical/rich-text";
+  $getSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_NORMAL,
+  createCommand,
+  $createTextNode,
+} from "lexical";
 import { $setBlocksType } from "@lexical/selection";
-import { $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND } from "lexical";
-import { useCallback, useMemo, useState } from "react";
-import { createPortal } from "react-dom"; // <--- Добавь эту строку
-// 1. Класс для опций нашего меню
-class SlashOption extends MenuOption {
-  constructor(title, icon, onSelect) {
-    super(title);
-    this.title = title;
-    this.icon = icon;
-    this.onSelect = onSelect;
-  }
-}
+import { $createHeadingNode, $createQuoteNode } from "@lexical/rich-text";
+import { $createCodeNode } from "@lexical/code";
+import {
+  INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_ORDERED_LIST_COMMAND,
+  INSERT_CHECK_LIST_COMMAND,
+} from "@lexical/list";
+import { $createMwsTableNode } from "../nodes/MwsTableNode";
+import { SlashMenu } from "../../../components/blocks/Popovers/SlashMenu";
+
+const INSERT_MWS_TABLE_COMMAND = createCommand("INSERT_MWS_TABLE_COMMAND");
 
 export function SlashMenuPlugin() {
   const [editor] = useLexicalComposerContext();
-  const [queryString, setQueryString] = useState(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [coords, setCoords] = useState({ x: 0, y: 0 });
 
-  // 2. Определяем список доступных команд (Итерация 5 из спеки)
-  const options = useMemo(() => {
-    const baseOptions = [
-      new SlashOption("Заголовок 1", "H1", () => {
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "/") {
+        setTimeout(() => {
+          const domSelection = window.getSelection();
+          if (domSelection && domSelection.rangeCount > 0) {
+            const range = domSelection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+
+            // УМНОЕ ПОЗИЦИОНИРОВАНИЕ
+            const menuHeight = 350; // Примерная максимальная высота меню
+            const spaceBelow = window.innerHeight - rect.bottom;
+
+            let yPos = rect.bottom + window.scrollY + 10;
+
+            // Если внизу мало места, открываем меню ВВЕРХ
+            if (spaceBelow < menuHeight) {
+              yPos = Math.max(10, rect.top + window.scrollY - menuHeight - 10);
+            }
+
+            setCoords({
+              x: rect.left,
+              y: yPos,
+            });
+            setIsOpen(true);
+          }
+        }, 50);
+      }
+
+      if (isOpen && (e.key === "Escape" || e.key === "Enter")) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    return editor.registerCommand(
+      INSERT_MWS_TABLE_COMMAND,
+      (payload) => {
         editor.update(() => {
           const selection = $getSelection();
           if ($isRangeSelection(selection)) {
-            $setBlocksType(selection, () => $createHeadingNode("h1"));
+            const tableNode = $createMwsTableNode(payload.tableId);
+            selection.insertNodes([tableNode, $createTextNode("")]);
           }
         });
-      }),
-      new SlashOption("Заголовок 2", "H2", () => {
-        editor.update(() => {
-          const selection = $getSelection();
-          if ($isRangeSelection(selection)) {
-            $setBlocksType(selection, () => $createHeadingNode("h2"));
-          }
-        });
-      }),
-      new SlashOption("Цитата", "💬", () => {
-        editor.update(() => {
-          const selection = $getSelection();
-          if ($isRangeSelection(selection)) {
-            $setBlocksType(selection, () => $createQuoteNode());
-          }
-        });
-      }),
-      new SlashOption("Таблица MWS", "📊", () => {
-        // Здесь мы позже вызовем модалку выбора таблицы (Итерация 4)
-        alert("Тут откроется модалка для выбора таблицы из базы!");
-        // editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, undefined);
-      }),
-    ];
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL,
+    );
+  }, [editor]);
 
-    // Простая фильтрация по введенному тексту после '/'
-    return queryString
-      ? baseOptions.filter((option) =>
-          option.title.toLowerCase().includes(queryString.toLowerCase()),
-        )
-      : baseOptions;
-  }, [editor, queryString]);
-
-  const onSelectOption = useCallback(
-    (selectedOption, nodeToRemove, closeMenu) => {
+  const handleSelect = useCallback(
+    (itemId) => {
+      editor.focus();
       editor.update(() => {
-        // Удаляем сам слэш и текст запроса
-        if (nodeToRemove) {
-          nodeToRemove.remove();
+        const selection = $getSelection();
+
+        if ($isRangeSelection(selection)) {
+          selection.modify("extend", "backward", "character");
+          selection.removeText();
+
+          try {
+            switch (itemId) {
+              case "h1":
+                $setBlocksType(selection, () => $createHeadingNode("h1"));
+                break;
+              case "h2":
+                $setBlocksType(selection, () => $createHeadingNode("h2"));
+                break;
+              case "h3":
+                $setBlocksType(selection, () => $createHeadingNode("h3"));
+                break;
+              case "quote":
+                $setBlocksType(selection, () => $createQuoteNode());
+                break;
+              case "code":
+                $setBlocksType(selection, () => $createCodeNode());
+                break;
+              case "ul":
+                editor.dispatchCommand(
+                  INSERT_UNORDERED_LIST_COMMAND,
+                  undefined,
+                );
+                break;
+              case "ol":
+                editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+                break;
+              case "check":
+                editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined);
+                break;
+              case "mws-table":
+              case "table":
+                editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, {
+                  tableId: `mws-${Date.now()}`,
+                });
+                break;
+              default:
+                break;
+            }
+          } catch (err) {
+            console.error("Ошибка вставки блока:", err);
+          }
         }
-        // Выполняем действие выбранной опции
-        selectedOption.onSelect();
       });
-      closeMenu();
+      setIsOpen(false);
     },
     [editor],
   );
 
   return (
-    <LexicalTypeaheadMenuPlugin
-      onQueryChange={setQueryString}
-      onSelectOption={onSelectOption}
-      triggerFn={(text) => {
-        // Регулярка ловит ввод '/', после которого идет текст
-        const regex = /(^|\s)\/([a-zA-Zа-яА-Я0-9_]*)$/;
-        const match = regex.exec(text);
-        if (match !== null) {
-          return {
-            leadOffset: match.index + match[1].length,
-            matchingString: match[2],
-            replaceableString: match[2],
-          };
-        }
-        return null;
-      }}
-      options={options}
-      menuRenderFn={(
-        anchorElementRef,
-        { selectedIndex, selectOptionAndCleanUp, setHighlightedIndex },
-      ) => {
-        // Если нет якоря (курсора) или опций — ничего не рендерим
-        if (anchorElementRef.current == null || options.length === 0) {
-          return null;
-        }
-
-        return createPortal(
-          <div className="absolute z-50 w-64 bg-white border border-gray-200 shadow-xl rounded-lg overflow-hidden flex flex-col p-1">
-            {options.map((option, i) => (
-              <button
-                key={option.key}
-                className={`flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md transition-colors ${
-                  selectedIndex === i
-                    ? "bg-primary-50 text-primary font-medium"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-                tabIndex={-1}
-                ref={(el) => {
-                  if (el && selectedIndex === i) {
-                    el.scrollIntoView({ block: "nearest" });
-                  }
-                }}
-                onMouseEnter={() => setHighlightedIndex(i)}
-                onClick={() => selectOptionAndCleanUp(option)}
-              >
-                <span className="text-gray-400 w-6 text-center">
-                  {option.icon}
-                </span>
-                {option.title}
-              </button>
-            ))}
-          </div>,
-          anchorElementRef.current, // Привязываем к координатам курсора
-        );
-      }}
+    <SlashMenu
+      isOpen={isOpen}
+      x={coords.x}
+      y={coords.y}
+      onClose={() => setIsOpen(false)}
+      onSelect={handleSelect}
     />
   );
 }

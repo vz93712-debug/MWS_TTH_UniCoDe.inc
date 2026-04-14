@@ -1,70 +1,133 @@
-import { useState } from 'react';
-import { Search, Table as TableIcon, X } from 'lucide-react';
-import { Input } from '../../ui/Input';
-import { Button } from '../../ui/Button';
+import {
+  X,
+  Database,
+  Search,
+  Table as TableIcon,
+  LayoutGrid,
+} from "lucide-react";
+import { useState } from "react";
 
-const MOCK_TABLES = [
-  { id: 1, name: 'Бэклог продукта MWS', rows: 124 },
-  { id: 2, name: 'Смета проекта Q3', rows: 45 },
-  { id: 3, name: 'База пользователей', rows: 1024 },
-];
+// ДОБАВИЛИ ПРОП onSelect
+export function TableSelectModal({ isOpen, onClose, onSelect }) {
+  const [searchQuery, setSearchQuery] = useState("");
 
-export function TableSelectModal({ isOpen, onClose }) {
-  const [selected, setSelected] = useState(null);
+  const mockDatabases = [
+    { id: "1", name: "Проекты и задачи (Спринт 4)", type: "kanban", count: 24 },
+    { id: "2", name: "Сотрудники отдела", type: "table", count: 145 },
+    { id: "3", name: "Бэклог продукта", type: "table", count: 89 },
+    { id: "4", name: "CRM: Клиенты B2B", type: "table", count: 1250 },
+  ];
+
+  // ЛОГИКА ПОИСКА: Фильтруем массив на лету
+  const filteredDatabases = mockDatabases.filter((db) =>
+    db.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#19191C]/40 backdrop-blur-[2px] p-4 font-sans">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
-        
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col transform transition-all">
         {/* Шапка */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-divider">
-          <h2 className="text-lg font-bold text-gray-900">Вставить таблицу MWS</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-[#E33A3A] transition-colors p-1">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-[#E33A3A]">
+              <Database size={18} />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">Импорт из MWS</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+          >
             <X size={20} />
           </button>
         </div>
 
         {/* Поиск */}
-        <div className="p-4 bg-gray-50/50 border-b border-divider">
-          <Input icon={<Search size={16} />} placeholder="Найти таблицу..." />
+        <div className="px-6 py-4 border-b border-gray-50">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Поиск по базам данных..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#E33A3A] focus:ring-1 focus:ring-[#E33A3A] transition-all"
+            />
+          </div>
         </div>
 
         {/* Список таблиц */}
-        <div className="p-2 max-h-[300px] overflow-y-auto">
-          {MOCK_TABLES.map(table => (
-            <button
-              key={table.id}
-              onClick={() => setSelected(table.id)}
-              className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all ${
-                selected === table.id 
-                  ? 'bg-red-50 border border-red-200' 
-                  : 'border border-transparent hover:bg-gray-50'
-              }`}
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                selected === table.id ? 'bg-[#E33A3A] text-white' : 'bg-gray-100 text-gray-500'
-              }`}>
-                <TableIcon size={20} strokeWidth={selected === table.id ? 2.5 : 2} />
+        <div className="px-3 py-3 max-h-[300px] overflow-y-auto">
+          <h3 className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            Ваши базы данных
+          </h3>
+
+          <div className="space-y-1">
+            {filteredDatabases.length > 0 ? (
+              filteredDatabases.map((db) => (
+                <button
+                  key={db.id}
+                  onClick={() => {
+                    // ПЕРЕДАЕМ ДАННЫЕ НАВЕРХ И ЗАКРЫВАЕМ
+                    if (onSelect) onSelect(db.id, db.name);
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors group text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="text-gray-400 group-hover:text-[#E33A3A] transition-colors">
+                      {db.type === "kanban" ? (
+                        <LayoutGrid size={18} />
+                      ) : (
+                        <TableIcon size={18} />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {db.name}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {db.type === "kanban" ? "Канбан-доска" : "Таблица"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-1 rounded-md">
+                    {db.count} строк
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="text-center py-6 text-sm text-gray-400">
+                Таблицы не найдены
               </div>
-              <div className="text-left">
-                <p className={`text-[15px] font-medium ${selected === table.id ? 'text-red-900' : 'text-gray-900'}`}>
-                  {table.name}
-                </p>
-                <p className="text-xs text-gray-500">{table.rows} строк</p>
-              </div>
-            </button>
-          ))}
+            )}
+          </div>
         </div>
 
-        {/* Подвал с кнопками */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-divider flex items-center justify-end gap-3">
-          <Button variant="outline" onClick={onClose}>Отмена</Button>
-          {/* Кнопка заблокирована, если не выбрана таблица */}
-          <Button variant="primary" disabled={!selected}>Вставить</Button>
+        {/* Подвал */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg transition-colors shadow-sm"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => {
+              // ПЕРЕДАЕМ СИГНАЛ О СОЗДАНИИ НОВОЙ БАЗЫ
+              if (onSelect) onSelect("new", "Новая локальная база");
+              onClose();
+            }}
+            className="px-4 py-2 text-sm font-medium text-white bg-[#E33A3A] hover:bg-[#CC3434] rounded-lg transition-colors shadow-sm"
+          >
+            Создать новую
+          </button>
         </div>
-
       </div>
     </div>
   );

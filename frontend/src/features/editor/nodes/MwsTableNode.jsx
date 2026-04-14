@@ -1,48 +1,68 @@
 /* eslint-disable react-refresh/only-export-components */
-import { DecoratorNode } from "lexical";
 import React from "react";
+import { DecoratorNode, $getNodeByKey } from "lexical";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { DatabaseEmbedShell } from "../../../components/blocks/EditorShells/DatabaseEmbedShell";
 
-// 1. Визуальный React-компонент, который рисуется внутри редактора
-const MwsTableComponent = ({ tableId }) => {
+const MwsTableComponent = ({ nodeKey, tableId, viewType }) => {
+  const [editor] = useLexicalComposerContext();
+
+  const handleStateChange = (newTableId, newViewType) => {
+    editor.update(() => {
+      const node = $getNodeByKey(nodeKey);
+      if (node && $isMwsTableNode(node)) {
+        if (newTableId !== undefined) node.setTableId(newTableId);
+        if (newViewType !== undefined) node.setViewType(newViewType);
+      }
+    });
+  };
+
   return (
-    <div className="my-6 border-2 border-primary border-dashed p-6 rounded-lg bg-primary-50 flex items-center justify-center">
-      <div className="text-center">
-        <span className="font-bold text-primary block mb-2">
-          📊 Здесь будет отрендерена таблица MWS
-        </span>
-        <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
-          ID таблицы: {tableId}
-        </span>
-      </div>
+    <div
+      className="my-8 relative group/block lexical-block"
+      contentEditable={false}
+    >
+      <DatabaseEmbedShell
+        tableId={tableId}
+        viewType={viewType}
+        // Передаем универсальный коллбек для синхронизации с Lexical
+        onConnect={(id) => handleStateChange(id, undefined)}
+        onViewChange={(view) => handleStateChange(undefined, view)}
+      />
     </div>
   );
 };
 
-// 2. Класс логики (Node) для движка Lexical
 export class MwsTableNode extends DecoratorNode {
   __tableId;
+  __viewType;
 
   static getType() {
     return "mws-table";
   }
 
   static clone(node) {
-    return new MwsTableNode(node.__tableId, node.__key);
+    return new MwsTableNode(node.__tableId, node.__viewType, node.__key);
   }
 
-  constructor(tableId, key) {
+  constructor(tableId, viewType = "table", key) {
     super(key);
     this.__tableId = tableId;
+    this.__viewType = viewType;
   }
 
   static importJSON(serializedNode) {
-    return $createMwsTableNode(serializedNode.tableId);
+    return $createMwsTableNode(
+      serializedNode.tableId,
+      serializedNode.viewType || "table",
+    );
   }
 
   exportJSON() {
     return {
       type: "mws-table",
       tableId: this.__tableId,
+      viewType: this.__viewType,
       version: 1,
     };
   }
@@ -55,13 +75,29 @@ export class MwsTableNode extends DecoratorNode {
     return false;
   }
 
+  setTableId(tableId) {
+    const writable = this.getWritable();
+    writable.__tableId = tableId;
+  }
+
+  setViewType(viewType) {
+    const writable = this.getWritable();
+    writable.__viewType = viewType;
+  }
+
   decorate() {
-    return <MwsTableComponent tableId={this.__tableId} />;
+    return (
+      <MwsTableComponent
+        nodeKey={this.getKey()}
+        tableId={this.__tableId}
+        viewType={this.__viewType}
+      />
+    );
   }
 }
 
-export function $createMwsTableNode(tableId) {
-  return new MwsTableNode(tableId);
+export function $createMwsTableNode(tableId = null, viewType = "table") {
+  return new MwsTableNode(tableId, viewType);
 }
 
 export function $isMwsTableNode(node) {

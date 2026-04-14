@@ -9,15 +9,24 @@ import { ListNode, ListItemNode } from "@lexical/list";
 import { CodeNode, CodeHighlightNode } from "@lexical/code";
 import { LinkNode, AutoLinkNode } from "@lexical/link";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { ListPlugin } from "@lexical/react/LexicalListPlugin";
+import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
+// ДОБАВЛЯЕМ ПЛАГИНЫ ДЛЯ ССЫЛОК:
+import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
+import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
 
+// Наши кастомные элементы
 import { editorTheme } from "./theme";
 import { MwsTableNode } from "./nodes/MwsTableNode";
-import { AutoSavePlugin } from "./plugins/AutoSavePlugin";
 import { ImageNode } from "./nodes/ImageNode";
+
+// Наши плагины
 import { DragDropImagePlugin } from "./plugins/DragDropImagePlugin";
 import { SlashMenuPlugin } from "./plugins/SlashMenuPlugin";
-import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
 import { CodeHighlightPlugin } from "./plugins/CodeHighlightPlugin";
+import { TopToolbarPlugin } from "./plugins/TopToolbarPlugin";
+import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
+
 const editorConfig = {
   namespace: "WikiLiveEditor",
   nodes: [
@@ -41,38 +50,42 @@ const editorConfig = {
 export default function Editor() {
   return (
     <LexicalComposer initialConfig={editorConfig}>
-      <div className="relative w-full h-full min-h-[500px] outline-none">
-        <RichTextPlugin
-          contentEditable={
-            <ContentEditable className="outline-none min-h-[400px]" />
-          }
-          placeholder={
-            <div className="absolute top-8 left-8 text-gray-400 pointer-events-none">
-              Начните писать текст или используйте Markdown (# для заголовка)...
-            </div>
-          }
-          ErrorBoundary={LexicalErrorBoundary}
-        />
+      <div className="flex flex-col h-full bg-white">
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 px-8 shadow-sm">
+          <TopToolbarPlugin />
+        </div>
 
-        <HistoryPlugin />
-        <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-
-        {/* 2. РЕНДЕРИМ ЕГО ВНУТРИ КОМПОЗЕРА */}
-        <SlashMenuPlugin />
-
-        <AutoSavePlugin pageId="demo-page-1" />
+        <div className="flex-1 overflow-y-auto pb-32 pt-12 px-8 scrollbar-thin scrollbar-thumb-gray-200">
+          <div className="max-w-[900px] mx-auto w-full relative">
+            <RichTextPlugin
+              contentEditable={
+                <ContentEditable className="outline-none min-h-[500px] text-base text-gray-800 leading-relaxed font-sans" />
+              }
+              placeholder={
+                <div className="absolute top-0 left-0 text-gray-400 pointer-events-none text-base font-sans select-none">
+                  Начните писать текст или используйте Markdown (# для
+                  заголовка)...
+                </div>
+              }
+              ErrorBoundary={LexicalErrorBoundary}
+            />
+            <FloatingToolbarPlugin />
+          </div>
+        </div>
       </div>
-      <SlashMenuPlugin />
-      <DragDropImagePlugin /> {/* <--- Плагин загрузки картинок */}
-      <AutoSavePlugin pageId="demo-page-1" />
-      {/* Наши кастомные плагины */}
+
+      <HistoryPlugin />
+      <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+      <ListPlugin />
+      <CheckListPlugin />
+
+      {/* ИНИЦИАЛИЗАЦИЯ ССЫЛОК */}
+      <LinkPlugin />
+      <ClickableLinkPlugin />
+
       <SlashMenuPlugin />
       <DragDropImagePlugin />
-      <FloatingToolbarPlugin /> {/* <--- Тот самый тулбар */}
-      <AutoSavePlugin pageId="demo-page-1" />
-      <FloatingToolbarPlugin />
       <CodeHighlightPlugin />
-      <AutoSavePlugin pageId="demo-page-1" />
     </LexicalComposer>
   );
 }

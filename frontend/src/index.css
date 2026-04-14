@@ -3,63 +3,137 @@
 @tailwind utilities;
 
 /* 1. Регистрируем Шрифты MTS */
-
 @font-face {
-  font-family: 'MTS Compact';
-  src: url('/fonts/MTSCompact-Regular-7LG3MIHS.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
+    font-family: "MTS Compact";
+    src: url("/fonts/MTSCompact-Regular-7LG3MIHS.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
 }
 
 @font-face {
-  font-family: 'MTS Compact';
-  src: url('/fonts/MTSCompact-Medium-Y4SPBQKE.ttf') format('truetype');
-  font-weight: 500;
-  font-style: normal;
+    font-family: "MTS Compact";
+    src: url("/fonts/MTSCompact-Medium-Y4SPBQKE.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
 }
 
 @font-face {
-  font-family: 'MTS Compact';
-  src: url('/fonts/MTSCompact-Bold-LBQB3WRX.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
+    font-family: "MTS Compact";
+    src: url("/fonts/MTSCompact-Bold-LBQB3WRX.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
 }
 
 @font-face {
-  font-family: 'MTS Wide';
-  src: url('/fonts/MTSWide-Bold-XQ34CV62.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
+    font-family: "MTS Wide";
+    src: url("/fonts/MTSWide-Bold-XQ34CV62.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
 }
 
 /* 2. Применяем шрифты по умолчанию */
-
 @layer base {
-  html {
-    /* Основной шрифт - MTS Compact Regular */
-    font-family: 'MTS Compact', sans-serif;
-    @apply text-[#19191C];
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  
-  /* Переопределяем font-serif на MTS Wide (font-display) */
-  .font-serif, h1, h2, h3 {
-    font-family: 'MTS Wide', serif;
-    font-weight: 700;
-  }
+    html {
+        font-family: "MTS Compact", sans-serif;
+        @apply text-[#19191C];
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-smoothing: grayscale;
+    }
+
+    h1,
+    h2,
+    h3,
+    .font-serif,
+    .font-wide {
+        font-family: "MTS Wide", serif;
+        font-weight: 700;
+    }
 }
 
 /* 3. Кастомные утилиты */
-
 @layer utilities {
-  /* Тонкие серые разделители, как на макетах */
-  .border-divider {
-    border-color: #E6E8EA;
-  }
-  
-  /* Убираем scrollbar, сохраняя прокрутку */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+    .border-divider {
+        border-color: #e6e8ea;
+    }
+
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Тонкий и аккуратный скроллбар */
+    .scrollbar-thin::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+        background-color: #e5e7eb;
+        border-radius: 10px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+        background-color: #d1d5db;
+    }
+}
+
+/* =========================================
+   4. LEXICAL: СПИСКИ И ЧЕКЛИСТЫ
+   ========================================= */
+
+.lexical-ul {
+    list-style-type: disc;
+    list-style-position: inside;
+}
+
+[data-lexical-editor] ul:has(li[role="checkbox"]) {
+    list-style-type: none !important;
+    padding-left: 0 !important;
+}
+
+[data-lexical-editor] li[role="checkbox"] input {
+    display: none !important;
+}
+
+[data-lexical-editor] li[role="checkbox"] {
+    list-style-type: none !important;
+    position: relative;
+    padding-left: 28px !important;
+    margin-bottom: 6px;
+    cursor: pointer;
+}
+
+[data-lexical-editor] li[role="checkbox"]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 2px;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    background-color: #fff;
+    transition: all 0.2s ease;
+}
+
+[data-lexical-editor] li[role="checkbox"][aria-checked="true"]::before {
+    background-color: #e33a3a;
+    border-color: #e33a3a;
+}
+
+[data-lexical-editor] li[role="checkbox"][aria-checked="true"]::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    top: 4px;
+    width: 6px;
+    height: 11px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+[data-lexical-editor] li[role="checkbox"][aria-checked="true"] {
+    color: #9ca3af;
+    text-decoration: line-through;
 }
