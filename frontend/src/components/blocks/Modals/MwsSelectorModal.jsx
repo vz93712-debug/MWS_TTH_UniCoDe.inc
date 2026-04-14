@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Table as TableIcon,
   Search,
@@ -13,9 +13,19 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
   const [spaces, setSpaces] = useState([]);
   const [selectedSpaceId, setSelectedSpaceId] = useState(null);
   const [tables, setTables] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [isSpacesLoading, setIsSpacesLoading] = useState(false);
   const [isTablesLoading, setIsTablesLoading] = useState(false);
+
+  // Универсальный помощник для извлечения массива из ответа (обработка пагинации DRF)
+  const extractArray = (data) => {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === "object") {
+      return data.results || data.data || data.spaces || data.nodes || [];
+    }
+    return [];
+  };
 
   // 1. Загружаем пространства MWS при открытии модалки
   useEffect(() => {
@@ -25,12 +35,10 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       setIsSpacesLoading(true);
       try {
         const response = await api.getMwsSpaces();
-        // Предполагаем, что бэкенд возвращает массив пространств
-        const spacesData = response.data || response;
+        const spacesData = extractArray(response);
         setSpaces(spacesData);
 
-        // Автоматически выбираем первое пространство, если оно есть
-        if (spacesData.length > 0) {
+        if (spacesData.length > 0 && !selectedSpaceId) {
           setSelectedSpaceId(spacesData[0].id);
         }
       } catch (error) {
@@ -51,7 +59,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       setIsTablesLoading(true);
       try {
         const response = await api.getMwsNodes(selectedSpaceId);
-        const tablesData = response.data || response;
+        const tablesData = extractArray(response);
         setTables(tablesData);
       } catch (error) {
         console.error("Ошибка загрузки таблиц MWS:", error);
@@ -62,6 +70,13 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
 
     fetchTables();
   }, [selectedSpaceId, isOpen]);
+
+  // Фильтрация таблиц по поисковому запросу
+  const filteredTables = useMemo(() => {
+    return tables.filter((table) =>
+      table.name?.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [tables, searchQuery]);
 
   if (!isOpen) return null;
 
@@ -112,7 +127,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                 <button
                   key={space.id}
                   onClick={() => setSelectedSpaceId(space.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors ${
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors text-left ${
                     selectedSpaceId === space.id
                       ? "bg-indigo-50 text-indigo-700 font-bold"
                       : "text-gray-600 hover:bg-gray-50 font-medium"
@@ -133,7 +148,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
           </div>
 
           {/* Правая колонка: Таблицы */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 bg-white">
             <div className="relative mb-6">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -141,40 +156,50 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
               />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Поиск по названию таблицы..."
-                className="w-full bg-white border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-300 transition-all shadow-sm"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-300 transition-all shadow-sm"
               />
             </div>
 
             {isTablesLoading ? (
               <div className="flex flex-col items-center justify-center h-40 gap-3 text-gray-400">
                 <Loader2 className="animate-spin" size={24} />
-                <span className="text-sm">Загрузка таблиц...</span>
+                <span className="text-sm font-medium">
+                  Синхронизация с MWS...
+                </span>
               </div>
-            ) : tables.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+            ) : filteredTables.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-400 text-center">
                 <TableIcon size={32} className="mb-3 opacity-20" />
-                <span className="text-sm">В этом пространстве нет таблиц</span>
+                <span className="text-sm">
+                  {searchQuery
+                    ? "Таблицы не найдены"
+                    : "В этом пространстве нет таблиц"}
+                </span>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
-                {tables.map((table) => (
+                {filteredTables.map((table) => (
                   <button
                     key={table.id}
                     onClick={() => {
                       onSelectTable(table.id, table.name);
                       onClose();
                     }}
-                    className="flex flex-col items-start gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all text-left group"
+                    className="flex flex-col items-start gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-500 hover:shadow-md transition-all text-left group"
                   >
-                    <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+                    <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500 group-hover:bg-indigo-100 transition-colors">
                       <TableIcon size={20} />
                     </div>
-                    <div>
+                    <div className="w-full">
                       <h4 className="text-sm font-bold text-gray-900 truncate w-full mb-1">
                         {table.name}
                       </h4>
-                      <p className="text-xs text-gray-500">ID: {table.id}</p>
+                      <p className="text-[10px] text-gray-400 font-mono truncate">
+                        ID: {table.id}
+                      </p>
                     </div>
                   </button>
                 ))}

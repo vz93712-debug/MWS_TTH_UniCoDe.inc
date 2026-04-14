@@ -68,11 +68,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ prompt, page_id: pageId }),
     }),
-  askAssistant: (pageId, message) =>
+  askAssistant: (pageId, message, sessionId = null) =>
     request("/ai/chat/", {
       method: "POST",
-      body: JSON.stringify({ page_id: pageId, message }),
+      body: JSON.stringify({
+        page_id: pageId,
+        message: message,
+        ...(sessionId && { session_id: sessionId }), // Добавляем сессию, если она есть
+      }),
     }),
+  smartImport: (content, fileType, spaceId, title = "") =>
+    request("/ai/smart-import/", {
+      method: "POST",
+      body: JSON.stringify({
+        content,
+        file_type: fileType,
+        space_id: spaceId,
+        title,
+      }),
+    }),
+
   checkTaskStatus: (taskId) => request(`/ai/tasks/${taskId}/`),
 
   // === 5. СОХРАНЕНИЕ СТРАНИЦЫ (AutoSave) ===

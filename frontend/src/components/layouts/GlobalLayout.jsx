@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { ShareModal } from "../blocks/Modals/ShareModal";
 import { CommandPalette } from "../blocks/Modals/CommandPalette";
+// === ИМПОРТ НАШЕЙ НОВОЙ МОДАЛКИ ===
+import { SmartImportModal } from "../blocks/Modals/SmartImportModal";
 import {
   Search,
   Monitor,
@@ -29,39 +31,39 @@ export function GlobalLayout({ children, onPageSelect }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  // === СТЕЙТ ДЛЯ ИМПОРТА ===
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
   // === ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ===
-  useEffect(() => {
-    const fetchTree = async () => {
-      setIsTreeLoading(true);
-      try {
-        const spaces = await api.getSpaces();
+  const fetchTree = async () => {
+    setIsTreeLoading(true);
+    try {
+      const spaces = await api.getSpaces();
 
-        if (spaces && spaces.length > 0) {
-          const spaceId = spaces[0].id;
-          setCurrentSpaceId(spaceId);
+      if (spaces && spaces.length > 0) {
+        const spaceId = spaces[0].id;
+        setCurrentSpaceId(spaceId);
 
-          const pagesTree = await api.getPagesTree(spaceId);
+        const pagesTree = await api.getPagesTree(spaceId);
 
-          // ИСПРАВЛЕНИЕ: Рекурсивный адаптер теперь корректно обрабатывает бесконечную вложенность
-          const formatNode = (node) => ({
-            id: node.id,
-            name: node.title || "Без названия",
-            type: node.children && node.children.length > 0 ? "folder" : "file",
-            isOpen: false,
-            // Рекурсивно вызываем formatNode для всех детей, сколько бы уровней ни было
-            children: node.children ? node.children.map(formatNode) : [],
-          });
+        const formatNode = (node) => ({
+          id: node.id,
+          name: node.title || "Без названия",
+          type: node.children && node.children.length > 0 ? "folder" : "file",
+          isOpen: false,
+          children: node.children ? node.children.map(formatNode) : [],
+        });
 
-          setFileTree(pagesTree.map(formatNode));
-        }
-      } catch (error) {
-        console.error("Ошибка загрузки проводника:", error);
-      } finally {
-        setIsTreeLoading(false);
+        setFileTree(pagesTree.map(formatNode));
       }
-    };
+    } catch (error) {
+      console.error("Ошибка загрузки проводника:", error);
+    } finally {
+      setIsTreeLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchTree();
   }, []);
 
@@ -99,7 +101,6 @@ export function GlobalLayout({ children, onPageSelect }) {
         },
       };
       const newPage = await api.createPage(currentSpaceId, {
-        // Добавляем случайное число к названию, чтобы обойти уникальный ключ БД
         title: `Новая страница ${Math.floor(Math.random() * 10000)}`,
         content: emptyLexicalState,
       });
@@ -113,7 +114,6 @@ export function GlobalLayout({ children, onPageSelect }) {
       setFileTree([...fileTree, formattedNewPage]);
       setIsCreateOpen(false);
 
-      // ИСПРАВЛЕНИЕ: Вызываем onPageSelect после создания
       if (onPageSelect) onPageSelect(newPage.id);
     } catch (error) {
       console.error("Ошибка при создании страницы:", error);
@@ -122,7 +122,7 @@ export function GlobalLayout({ children, onPageSelect }) {
 
   const handleCreateFolder = () => {
     alert(
-      "Для хакатона папки создаются автоматически, если перетащить страницу внутрь другой страницы (в разработке)",
+      "Для хакатона папки создаются автоматически, если перетащить страницу внутрь другой страницы",
     );
     setIsCreateOpen(false);
   };
@@ -138,7 +138,6 @@ export function GlobalLayout({ children, onPageSelect }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // ИСПРАВЛЕНИЕ: Рекурсивный компонент для отрисовки бесконечного дерева файлов
   const renderTree = (nodes, level = 0) => {
     return nodes.map((node) => (
       <div key={node.id} style={{ paddingLeft: `${level === 0 ? 0 : 12}px` }}>
@@ -158,14 +157,12 @@ export function GlobalLayout({ children, onPageSelect }) {
             </button>
             {node.isOpen && node.children && (
               <div className="ml-3 border-l border-gray-200 pl-1">
-                {/* Рекурсивный вызов для следующего уровня */}
                 {renderTree(node.children, level + 1)}
               </div>
             )}
           </>
         ) : (
           <button
-            // ИСПРАВЛЕНИЕ: Добавили обработчик клика для переключения страницы
             onClick={() => onPageSelect && onPageSelect(node.id)}
             className={`w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group ${level === 0 ? "ml-4" : ""}`}
           >
@@ -191,7 +188,19 @@ export function GlobalLayout({ children, onPageSelect }) {
         onClose={() => setIsCommandPaletteOpen(false)}
       />
 
-      {/* 1. УЗКАЯ ПАНЕЛЬ НАВИГАЦИИ */}
+      {/* === МОДАЛКА УМНОГО ИМПОРТА === */}
+      <SmartImportModal
+        isOpen={isSmartImportOpen}
+        onClose={() => setIsSmartImportOpen(false)}
+        currentSpaceId={currentSpaceId}
+        onImportSuccess={(pageId) => {
+          // При успехе перезапрашиваем дерево файлов, чтобы появилась новая страница
+          fetchTree();
+          // И сразу открываем её в редакторе
+          if (onPageSelect) onPageSelect(pageId);
+        }}
+      />
+
       <aside className="w-14 flex flex-col items-center py-3 border-r border-gray-200 bg-white shrink-0 z-20 justify-between shadow-[1px_0_4px_rgba(0,0,0,0.02)] relative">
         <div className="flex flex-col items-center gap-5 w-full">
           <button className="w-8 h-8 bg-[#FF0032] rounded-lg text-white flex items-center justify-center font-wide font-bold text-sm mb-2 hover:bg-[#CC0028] shadow-sm">
@@ -223,7 +232,6 @@ export function GlobalLayout({ children, onPageSelect }) {
         </div>
       </aside>
 
-      {/* 2. ПАНЕЛЬ ПРОСТРАНСТВА */}
       <aside
         className={`border-r border-gray-200 flex flex-col bg-gray-50/50 shrink-0 z-10 justify-between transition-all duration-300 ease-in-out ${isSidebarOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden border-none"}`}
       >
@@ -258,7 +266,6 @@ export function GlobalLayout({ children, onPageSelect }) {
                   Нет страниц
                 </div>
               ) : (
-                /* ВЫЗЫВАЕМ РЕКУРСИВНУЮ ФУНКЦИЮ ОТРИСОВКИ */
                 renderTree(fileTree)
               )}
             </div>
@@ -297,8 +304,10 @@ export function GlobalLayout({ children, onPageSelect }) {
               </>
             )}
           </div>
+
+          {/* === НАША КНОПКА ИМПОРТА === */}
           <button
-            onClick={() => alert("Интеграция с API MWS Таблиц в разработке")}
+            onClick={() => setIsSmartImportOpen(true)}
             className="flex-1 border border-gray-200 hover:border-[#FF0032] text-gray-700 hover:text-[#FF0032] hover:bg-[#FFEBED] text-sm font-wide font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
           >
             <Upload size={16} /> Импорт
@@ -306,7 +315,6 @@ export function GlobalLayout({ children, onPageSelect }) {
         </div>
       </aside>
 
-      {/* 3. ОСНОВНАЯ РАБОЧАЯ ОБЛАСТЬ */}
       <main className="flex-1 flex flex-col min-w-0 bg-white relative z-30 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
