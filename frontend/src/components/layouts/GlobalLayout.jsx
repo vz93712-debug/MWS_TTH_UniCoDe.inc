@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { api } from "../../services/api"; // Подключаем наш API клиент
+import { api } from "../../services/api";
 import { ShareModal } from "../blocks/Modals/ShareModal";
+import { CommandPalette } from "../blocks/Modals/CommandPalette";
 import {
   Search,
   Monitor,
@@ -16,15 +17,15 @@ import {
   Folder,
   FileText,
 } from "lucide-react";
-// Добавь в импорты
-import { CommandPalette } from "../blocks/Modals/CommandPalette";
-export function GlobalLayout({ children }) {
+
+export function GlobalLayout({ children, onPageSelect }) {
   // === СТЕЙТЫ ДЛЯ РЕАЛЬНЫХ ДАННЫХ ===
   const [fileTree, setFileTree] = useState([]);
   const [currentSpaceId, setCurrentSpaceId] = useState(null);
   const [isTreeLoading, setIsTreeLoading] = useState(true);
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
   // === СТЕЙТЫ UI ===
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -42,13 +43,13 @@ export function GlobalLayout({ children }) {
 
           const pagesTree = await api.getPagesTree(spaceId);
 
-          // Рекурсивный адаптер для нашего UI
+          // ИСПРАВЛЕНИЕ: Рекурсивный адаптер теперь корректно обрабатывает бесконечную вложенность
           const formatNode = (node) => ({
             id: node.id,
             name: node.title || "Без названия",
-            // Если есть вложенные страницы — делаем папкой
             type: node.children && node.children.length > 0 ? "folder" : "file",
             isOpen: false,
+            // Рекурсивно вызываем formatNode для всех детей, сколько бы уровней ни было
             children: node.children ? node.children.map(formatNode) : [],
           });
 
@@ -65,21 +66,18 @@ export function GlobalLayout({ children }) {
   }, []);
 
   const toggleFolder = (folderId) => {
-    // Рекурсивная функция для открытия/закрытия папок на любом уровне
     const toggleNode = (nodes) =>
       nodes.map((node) => {
         if (node.id === folderId) return { ...node, isOpen: !node.isOpen };
-        if (node.children)
+        if (node.children && node.children.length > 0)
           return { ...node, children: toggleNode(node.children) };
         return node;
       });
     setFileTree(toggleNode(fileTree));
   };
 
-  // === СОЗДАНИЕ РЕАЛЬНОЙ СТРАНИЦЫ ===
   const handleCreateFile = async () => {
     if (!currentSpaceId) return;
-
     try {
       const emptyLexicalState = {
         root: {
@@ -100,12 +98,10 @@ export function GlobalLayout({ children }) {
           version: 1,
         },
       };
-
       const newPage = await api.createPage(currentSpaceId, {
         title: "Новая страница",
         content: emptyLexicalState,
       });
-
       const formattedNewPage = {
         id: newPage.id,
         name: newPage.title,
@@ -113,11 +109,11 @@ export function GlobalLayout({ children }) {
         isOpen: false,
         children: [],
       };
-
       setFileTree([...fileTree, formattedNewPage]);
       setIsCreateOpen(false);
 
-      // TODO: Прикрутить react-router для перехода на: /pages/${newPage.id}
+      // ИСПРАВЛЕНИЕ: Вызываем onPageSelect после создания
+      if (onPageSelect) onPageSelect(newPage.id);
     } catch (error) {
       console.error("Ошибка при создании страницы:", error);
     }
@@ -130,7 +126,6 @@ export function GlobalLayout({ children }) {
     setIsCreateOpen(false);
   };
 
-  // Глобальный слушатель для Cmd+K (Mac) или Ctrl+K (Win)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -141,6 +136,49 @@ export function GlobalLayout({ children }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // ИСПРАВЛЕНИЕ: Рекурсивный компонент для отрисовки бесконечного дерева файлов
+  const renderTree = (nodes, level = 0) => {
+    return nodes.map((node) => (
+      <div key={node.id} style={{ paddingLeft: `${level === 0 ? 0 : 12}px` }}>
+        {node.type === "folder" ? (
+          <>
+            <button
+              onClick={() => toggleFolder(node.id)}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors ${level > 0 ? "mt-0.5" : ""}`}
+            >
+              {node.isOpen ? (
+                <ChevronDown size={14} className="text-gray-400 shrink-0" />
+              ) : (
+                <ChevronRight size={14} className="text-gray-400 shrink-0" />
+              )}
+              <Folder size={16} className="text-gray-400 shrink-0" />
+              <span className="font-medium truncate">{node.name}</span>
+            </button>
+            {node.isOpen && node.children && (
+              <div className="ml-3 border-l border-gray-200 pl-1">
+                {/* Рекурсивный вызов для следующего уровня */}
+                {renderTree(node.children, level + 1)}
+              </div>
+            )}
+          </>
+        ) : (
+          <button
+            // ИСПРАВЛЕНИЕ: Добавили обработчик клика для переключения страницы
+            onClick={() => onPageSelect && onPageSelect(node.id)}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group ${level === 0 ? "ml-4" : ""}`}
+          >
+            <FileText
+              size={14}
+              className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
+            />
+            <span className="truncate">{node.name}</span>
+          </button>
+        )}
+      </div>
+    ));
+  };
+
   return (
     <div className="flex h-screen w-full bg-white text-[#19191C] font-sans overflow-hidden">
       <ShareModal
@@ -151,13 +189,17 @@ export function GlobalLayout({ children }) {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
       />
+
       {/* 1. УЗКАЯ ПАНЕЛЬ НАВИГАЦИИ */}
       <aside className="w-14 flex flex-col items-center py-3 border-r border-gray-200 bg-white shrink-0 z-20 justify-between shadow-[1px_0_4px_rgba(0,0,0,0.02)] relative">
         <div className="flex flex-col items-center gap-5 w-full">
           <button className="w-8 h-8 bg-[#FF0032] rounded-lg text-white flex items-center justify-center font-wide font-bold text-sm mb-2 hover:bg-[#CC0028] shadow-sm">
             W
           </button>
-          <button className="text-gray-400 hover:text-[#FF0032] transition-colors">
+          <button
+            onClick={() => setIsCommandPaletteOpen(true)}
+            className="text-gray-400 hover:text-[#FF0032] transition-colors"
+          >
             <Search size={20} />
           </button>
           <button className="text-[#FF0032] bg-[#FFEBED] w-10 h-10 rounded-xl flex items-center justify-center">
@@ -193,7 +235,6 @@ export function GlobalLayout({ children }) {
               <Search size={16} strokeWidth={2.5} />
             </button>
           </div>
-
           <div className="px-4 pb-4 shrink-0">
             <input
               type="text"
@@ -206,7 +247,6 @@ export function GlobalLayout({ children }) {
             <div className="text-[11px] font-wide font-bold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-2">
               Проводник
             </div>
-
             <div className="space-y-0.5">
               {isTreeLoading ? (
                 <div className="px-4 py-2 text-sm text-gray-400">
@@ -217,61 +257,8 @@ export function GlobalLayout({ children }) {
                   Нет страниц
                 </div>
               ) : (
-                fileTree.map((node) => (
-                  <div key={node.id}>
-                    {node.type === "folder" ? (
-                      <>
-                        <button
-                          onClick={() => toggleFolder(node.id)}
-                          className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-700 transition-colors"
-                        >
-                          {node.isOpen ? (
-                            <ChevronDown
-                              size={14}
-                              className="text-gray-400 shrink-0"
-                            />
-                          ) : (
-                            <ChevronRight
-                              size={14}
-                              className="text-gray-400 shrink-0"
-                            />
-                          )}
-                          <Folder
-                            size={16}
-                            className="text-gray-400 shrink-0"
-                          />
-                          <span className="font-medium truncate">
-                            {node.name}
-                          </span>
-                        </button>
-                        {node.isOpen && (
-                          <div className="ml-6 border-l border-gray-200 pl-1 mt-0.5 space-y-0.5">
-                            {node.children.map((child) => (
-                              <button
-                                key={child.id}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group"
-                              >
-                                <FileText
-                                  size={14}
-                                  className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
-                                />
-                                <span className="truncate">{child.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <button className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors ml-4 group">
-                        <FileText
-                          size={14}
-                          className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
-                        />
-                        <span className="truncate">{node.name}</span>
-                      </button>
-                    )}
-                  </div>
-                ))
+                /* ВЫЗЫВАЕМ РЕКУРСИВНУЮ ФУНКЦИЮ ОТРИСОВКИ */
+                renderTree(fileTree)
               )}
             </div>
           </div>
@@ -345,7 +332,6 @@ export function GlobalLayout({ children }) {
               Архитектура WikiLive
             </span>
           </div>
-
           <div className="flex items-center gap-4">
             <div className="flex -space-x-1">
               <div className="w-7 h-7 rounded-full border-2 border-white bg-green-600 flex items-center justify-center text-white text-[11px] font-bold z-10 shadow-sm cursor-pointer hover:-translate-y-0.5 transition-transform">
@@ -355,18 +341,14 @@ export function GlobalLayout({ children }) {
                 A
               </div>
             </div>
-
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="bg-[#FF0032] hover:bg-[#CC0028] text-white text-[13px] font-wide font-bold px-4 py-1.5 rounded-lg transition-colors shadow-sm"
             >
               Поделиться
             </button>
-            <button
-              onClick={() => setIsCommandPaletteOpen(true)}
-              className="text-gray-400 hover:text-[#FF0032] transition-colors"
-            >
-              <Search size={20} />
+            <button className="text-gray-400 hover:text-[#FF0032] bg-gray-50 hover:bg-[#FFEBED] p-1.5 rounded-lg transition-colors">
+              <Link2 size={18} strokeWidth={2} />
             </button>
           </div>
         </header>

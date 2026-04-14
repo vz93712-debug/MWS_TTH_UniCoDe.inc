@@ -68,7 +68,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ prompt, page_id: pageId }),
     }),
-
+  askAssistant: (pageId, message) =>
+    request("/ai/chat/", {
+      method: "POST",
+      body: JSON.stringify({ page_id: pageId, message }),
+    }),
   checkTaskStatus: (taskId) => request(`/ai/tasks/${taskId}/`),
 
   // === 5. СОХРАНЕНИЕ СТРАНИЦЫ (AutoSave) ===
