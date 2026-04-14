@@ -23,7 +23,8 @@ import { WebsocketProvider } from "y-websocket";
 import { editorTheme } from "./theme";
 import { MwsTableNode } from "./nodes/MwsTableNode";
 import { ImageNode } from "./nodes/ImageNode";
-
+import { useState } from "react";
+import { MwsSelectorModal } from "../../components/blocks/Modals/MwsSelectorModal";
 // Наши плагины
 import { DragDropImagePlugin } from "./plugins/DragDropImagePlugin";
 import { SlashMenuPlugin } from "./plugins/SlashMenuPlugin";
@@ -53,6 +54,9 @@ const editorConfig = {
 
 // Передаем pageId в пропсы (по умолчанию тестовая страница)
 export default function Editor({ pageId = "demo-page-123" }) {
+  // === СТЕЙТ ДЛЯ МОДАЛКИ MWS ===
+  const [isMwsModalOpen, setIsMwsModalOpen] = useState(false);
+
   // НАСТРОЙКА ПОДКЛЮЧЕНИЯ К DJANGO CHANNELS
   const providerFactory = (id, yjsDocMap) => {
     const doc = new Y.Doc();
@@ -125,9 +129,22 @@ export default function Editor({ pageId = "demo-page-123" }) {
       <CheckListPlugin />
       <LinkPlugin />
       <ClickableLinkPlugin />
-      <SlashMenuPlugin />
+
+      {/* ПРОКИДЫВАЕМ ФУНКЦИЮ В СЛЭШ-МЕНЮ */}
+      <SlashMenuPlugin openMwsModal={() => setIsMwsModalOpen(true)} />
+
       <DragDropImagePlugin />
       <CodeHighlightPlugin />
+
+      {/* МОДАЛКА ВЫБОРА ТАБЛИЦЫ MWS */}
+      <MwsSelectorModal
+        isOpen={isMwsModalOpen}
+        onClose={() => setIsMwsModalOpen(false)}
+        onSelectTable={(tableId, tableName) => {
+          console.log("Вставляем таблицу MWS:", tableId, tableName);
+          alert(`Скоро тут вставится таблица: ${tableName}`);
+        }}
+      />
     </LexicalComposer>
   );
 }

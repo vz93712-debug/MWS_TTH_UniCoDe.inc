@@ -18,9 +18,13 @@ import {
 import { $createMwsTableNode } from "../nodes/MwsTableNode";
 import { SlashMenu } from "../../../components/blocks/Popovers/SlashMenu";
 
-const INSERT_MWS_TABLE_COMMAND = createCommand("INSERT_MWS_TABLE_COMMAND");
+// ЭКСПОРТИРУЕМ команду, чтобы её можно было вызвать из Editor.jsx после выбора в модалке
+// eslint-disable-next-line react-refresh/only-export-components
+export const INSERT_MWS_TABLE_COMMAND = createCommand(
+  "INSERT_MWS_TABLE_COMMAND",
+);
 
-export function SlashMenuPlugin() {
+export function SlashMenuPlugin({ openMwsModal }) {
   const [editor] = useLexicalComposerContext();
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -35,12 +39,11 @@ export function SlashMenuPlugin() {
             const rect = range.getBoundingClientRect();
 
             // УМНОЕ ПОЗИЦИОНИРОВАНИЕ
-            const menuHeight = 350; // Примерная максимальная высота меню
+            const menuHeight = 350;
             const spaceBelow = window.innerHeight - rect.bottom;
 
             let yPos = rect.bottom + window.scrollY + 10;
 
-            // Если внизу мало места, открываем меню ВВЕРХ
             if (spaceBelow < menuHeight) {
               yPos = Math.max(10, rect.top + window.scrollY - menuHeight - 10);
             }
@@ -63,6 +66,7 @@ export function SlashMenuPlugin() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
+  // Регистрируем команду вставки нашей таблицы MWS
   useEffect(() => {
     return editor.registerCommand(
       INSERT_MWS_TABLE_COMMAND,
@@ -83,59 +87,66 @@ export function SlashMenuPlugin() {
   const handleSelect = useCallback(
     (itemId) => {
       editor.focus();
+
+      // Сначала удаляем слэш в редакторе
       editor.update(() => {
         const selection = $getSelection();
-
         if ($isRangeSelection(selection)) {
           selection.modify("extend", "backward", "character");
           selection.removeText();
 
-          try {
-            switch (itemId) {
-              case "h1":
-                $setBlocksType(selection, () => $createHeadingNode("h1"));
-                break;
-              case "h2":
-                $setBlocksType(selection, () => $createHeadingNode("h2"));
-                break;
-              case "h3":
-                $setBlocksType(selection, () => $createHeadingNode("h3"));
-                break;
-              case "quote":
-                $setBlocksType(selection, () => $createQuoteNode());
-                break;
-              case "code":
-                $setBlocksType(selection, () => $createCodeNode());
-                break;
-              case "ul":
-                editor.dispatchCommand(
-                  INSERT_UNORDERED_LIST_COMMAND,
-                  undefined,
-                );
-                break;
-              case "ol":
-                editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
-                break;
-              case "check":
-                editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined);
-                break;
-              case "mws-table":
-              case "table":
-                editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, {
-                  tableId: `mws-${Date.now()}`,
-                });
-                break;
-              default:
-                break;
+          // Если это НЕ таблица, применяем стили сразу
+          if (itemId !== "mws-table" && itemId !== "table") {
+            try {
+              switch (itemId) {
+                case "h1":
+                  $setBlocksType(selection, () => $createHeadingNode("h1"));
+                  break;
+                case "h2":
+                  $setBlocksType(selection, () => $createHeadingNode("h2"));
+                  break;
+                case "h3":
+                  $setBlocksType(selection, () => $createHeadingNode("h3"));
+                  break;
+                case "quote":
+                  $setBlocksType(selection, () => $createQuoteNode());
+                  break;
+                case "code":
+                  $setBlocksType(selection, () => $createCodeNode());
+                  break;
+                case "ul":
+                  editor.dispatchCommand(
+                    INSERT_UNORDERED_LIST_COMMAND,
+                    undefined,
+                  );
+                  break;
+                case "ol":
+                  editor.dispatchCommand(
+                    INSERT_ORDERED_LIST_COMMAND,
+                    undefined,
+                  );
+                  break;
+                case "check":
+                  editor.dispatchCommand(INSERT_CHECK_LIST_COMMAND, undefined);
+                  break;
+                default:
+                  break;
+              }
+            } catch (err) {
+              console.error("Ошибка вставки блока:", err);
             }
-          } catch (err) {
-            console.error("Ошибка вставки блока:", err);
           }
         }
       });
+
+      // Если выбрали таблицу — открываем модалку!
+      if (itemId === "mws-table" || itemId === "table") {
+        if (openMwsModal) openMwsModal();
+      }
+
       setIsOpen(false);
     },
-    [editor],
+    [editor, openMwsModal],
   );
 
   return (

@@ -99,7 +99,8 @@ export function GlobalLayout({ children, onPageSelect }) {
         },
       };
       const newPage = await api.createPage(currentSpaceId, {
-        title: "Новая страница",
+        // Добавляем случайное число к названию, чтобы обойти уникальный ключ БД
+        title: `Новая страница ${Math.floor(Math.random() * 10000)}`,
         content: emptyLexicalState,
       });
       const formattedNewPage = {
