@@ -8,12 +8,13 @@ from apps.users.models import User
 from apps.spaces.models import Space
 
 import re
-
+import random 
 
 class WikiPage(BaseModel):
     """
     Страница вики.
-    При создании без title автоматически получает уникальное имя в рамках пространства.
+    При сохранении автоматически проверяет уникальность заголовка в рамках пространства.
+    Если заголовок занят — добавляет случайное 4-значное число (1000-9999).
     """
     space = models.ForeignKey(Space, on_delete=models.CASCADE, related_name='pages', verbose_name="Пространство")
     title = models.CharField(max_length=500, blank=True, default="", verbose_name="Заголовок")
@@ -49,53 +50,60 @@ class WikiPage(BaseModel):
         ]
 
     def __str__(self):
-        return f'{self.space.name} {self.title}'
+        return f'{self.space.name} - {self.title}'
 
     def save(self, *args, **kwargs):
         is_new = self._state.adding
         
-        # Автогенерация заголовка только при создании и если он пустой
-        if is_new and not self.title:
+        # Проверка и обеспечение уникальности заголовка при создании
+        if is_new and self.title:
             with transaction.atomic():
-                self.title = self._generate_default_title()
-                
+                self.title = self._ensure_unique_title()
+        
         super().save(*args, **kwargs)
 
-        # Собираем вектор из заголовка (вес A - самый важный) и описания (вес B)
-        # Для JSON-контента приводим его к тексту
+        # Обновляем поисковый вектор
         vector = (
             SearchVector('title', weight='A', config='russian') +
             SearchVector('description', weight='B', config='russian') +
             SearchVector('content', weight='C', config='russian')
         )
-        # Обновляем поле без вызова сигналов, чтобы не зациклить save()
         WikiPage.objects.filter(pk=self.pk).update(search_vector=vector)
 
-
-    def _generate_default_title(self) -> str:
-        base_title = "Новая страница"
+    def _ensure_unique_title(self) -> str:
+        """
+        Проверяет существование заголовка в пространстве.
+        Если занят — добавляет случайное 4-значное число (1000-9999).
+        """
+        base_title = self.title.strip()
         
-        # Получаем все заголовки в этом пространстве, начинающиеся с базового
-        existing = WikiPage.objects.filter(
-            space=self.space, 
-            title__startswith=base_title
-        ).values_list('title', flat=True)
+        # Проверяем, существует ли уже страница с таким заголовком
+        exists = WikiPage.objects.filter(
+            space=self.space,
+            title=base_title
+        ).exists()
         
-        max_num = 0
-        for title in existing:
-            if title == base_title:
-                num = 1
-            else:
-                # Ищем число в конце: "Новая страница 123"
-                match = re.match(rf"^{re.escape(base_title)}\s+(\d+)$", title)
-                num = int(match.group(1)) if match else 0
-            if num > max_num:
-                max_num = num
-                
-        # Если max_num == 0 → возвращаем "Новая страница"
-        # Если max_num >= 1 → возвращаем "Новая страница {max_num + 1}"
-        return f"{base_title} {max_num + 1}" if max_num >= 1 else base_title
-    
+        if not exists:
+            return base_title
+        
+        # Если заголовок занят — добавляем случайное число
+        # Пробуем до 5 раз на случай коллизий
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            random_suffix = random.randint(1000, 9999)
+            new_title = f"{base_title} {random_suffix}"
+            
+            # Проверяем уникальность новой комбинации
+            if not WikiPage.objects.filter(
+                space=self.space,
+                title=new_title
+            ).exists():
+                return new_title
+        
+        # Если все 5 попыток неудачны (крайне маловероятно), добавляем timestamp
+        import time
+        return f"{base_title} {int(time.time() * 1000) % 10000}"
+        
 
 class WikiPageVersion(BaseModel):
     """
