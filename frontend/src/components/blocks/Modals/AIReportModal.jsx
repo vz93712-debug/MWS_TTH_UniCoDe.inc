@@ -17,15 +17,17 @@ export function AIReportModal({
   const [status, setStatus] = useState("idle"); // idle, queued, processing, completed, error
   const [taskId, setTaskId] = useState(null);
 
-  // Универсальный экстрактор массивов (как мы делали раньше)
+  // === ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР МАССИВОВ ===
   const extractArray = (data) => {
+    if (!data) return [];
     if (Array.isArray(data)) return data;
-    if (data && typeof data === "object")
-      return data.results || data.data || data.spaces || data.nodes || [];
-    return [];
+    if (Array.isArray(data.results)) return data.results;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.spaces)) return data.spaces;
+    if (Array.isArray(data.nodes)) return data.nodes;
+    return []; // Возвращаем пустой массив, если ничего не подошло
   };
 
-  // 1. Грузим пространства
   // 1. Грузим пространства
   useEffect(() => {
     if (!isOpen) {
@@ -44,11 +46,11 @@ export function AIReportModal({
         setSpaces(data);
         if (data.length > 0 && !selectedSpaceId) setSelectedSpaceId(data[0].id);
       } catch (e) {
-        console.error(e);
+        console.error("Ошибка загрузки пространств:", e);
       }
     };
     fetchSpaces();
-  }, [isOpen]);
+  }, [isOpen, selectedSpaceId]);
 
   // 2. Грузим таблицы при смене пространства
   useEffect(() => {
@@ -61,7 +63,7 @@ export function AIReportModal({
         setTables(data);
         if (data.length > 0) setSelectedTableId(data[0].id);
       } catch (e) {
-        console.error(e);
+        console.error("Ошибка загрузки таблиц:", e);
       }
     };
     fetchTables();
@@ -86,7 +88,7 @@ export function AIReportModal({
           setStatus(result.status);
         }
       } catch (e) {
-        console.error("Ошибка проверки статуса:", e);
+        console.error("Ошибка опроса статуса:", e);
         setStatus("error");
       }
     };
@@ -104,9 +106,13 @@ export function AIReportModal({
         selectedSpaceId,
         prompt,
       );
-      if (response.task_id) setTaskId(response.task_id);
+      if (response.task_id) {
+        setTaskId(response.task_id);
+      } else {
+        throw new Error("Task ID не получен");
+      }
     } catch (error) {
-      console.error("Ошибка запуска генерации:", error);
+      console.error("Ошибка генерации:", error);
       setStatus("error");
     }
   };
@@ -149,7 +155,8 @@ export function AIReportModal({
                   onChange={(e) => setSelectedSpaceId(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-300 shadow-sm"
                 >
-                  {spaces.map((s) => (
+                  {/* Защита рендера */}
+                  {(spaces || []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
@@ -166,8 +173,10 @@ export function AIReportModal({
                   onChange={(e) => setSelectedTableId(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-300 shadow-sm"
                 >
-                  {tables.length === 0 && <option value="">Нет таблиц</option>}
-                  {tables.map((t) => (
+                  {(!tables || tables.length === 0) && (
+                    <option value="">Нет таблиц</option>
+                  )}
+                  {(tables || []).map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>

@@ -18,16 +18,21 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
   const [isSpacesLoading, setIsSpacesLoading] = useState(false);
   const [isTablesLoading, setIsTablesLoading] = useState(false);
 
-  // Универсальный помощник для извлечения массива из ответа (обработка пагинации DRF)
+  // === ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР ===
   const extractArray = (data) => {
+    if (!data) return [];
     if (Array.isArray(data)) return data;
-    if (data && typeof data === "object") {
+    if (Array.isArray(data.results)) return data.results;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.spaces)) return data.spaces;
+    if (Array.isArray(data.nodes)) return data.nodes;
+    if (typeof data === "object") {
       return data.results || data.data || data.spaces || data.nodes || [];
     }
     return [];
   };
 
-  // 1. Загружаем пространства MWS при открытии модалки
+  // 1. Загружаем пространства MWS
   useEffect(() => {
     if (!isOpen) return;
 
@@ -36,22 +41,23 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       try {
         const response = await api.getMwsSpaces();
         const spacesData = extractArray(response);
-        setSpaces(spacesData);
+        setSpaces(spacesData || []); // Страховка
 
-        if (spacesData.length > 0 && !selectedSpaceId) {
+        if (spacesData && spacesData.length > 0 && !selectedSpaceId) {
           setSelectedSpaceId(spacesData[0].id);
         }
       } catch (error) {
         console.error("Ошибка загрузки пространств MWS:", error);
+        setSpaces([]); // Сброс при ошибке
       } finally {
         setIsSpacesLoading(false);
       }
     };
 
     fetchSpaces();
-  }, [isOpen]);
+  }, [isOpen, selectedSpaceId]);
 
-  // 2. Загружаем таблицы (nodes) при выборе пространства
+  // 2. Загружаем таблицы
   useEffect(() => {
     if (!selectedSpaceId || !isOpen) return;
 
@@ -60,9 +66,10 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       try {
         const response = await api.getMwsNodes(selectedSpaceId);
         const tablesData = extractArray(response);
-        setTables(tablesData);
+        setTables(tablesData || []); // Страховка
       } catch (error) {
         console.error("Ошибка загрузки таблиц MWS:", error);
+        setTables([]); // Сброс при ошибке
       } finally {
         setIsTablesLoading(false);
       }
@@ -71,10 +78,11 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
     fetchTables();
   }, [selectedSpaceId, isOpen]);
 
-  // Фильтрация таблиц по поисковому запросу
+  // Фильтрация таблиц
   const filteredTables = useMemo(() => {
+    if (!Array.isArray(tables)) return [];
     return tables.filter((table) =>
-      table.name?.toLowerCase().includes(searchQuery.toLowerCase()),
+      table?.name?.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [tables, searchQuery]);
 
@@ -118,12 +126,12 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="animate-spin text-gray-400" size={20} />
               </div>
-            ) : spaces.length === 0 ? (
+            ) : !spaces || spaces.length === 0 ? (
               <p className="text-sm text-gray-500 px-2">
                 Нет доступных пространств
               </p>
             ) : (
-              spaces.map((space) => (
+              (spaces || []).map((space) => (
                 <button
                   key={space.id}
                   onClick={() => setSelectedSpaceId(space.id)}
@@ -170,7 +178,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                   Синхронизация с MWS...
                 </span>
               </div>
-            ) : filteredTables.length === 0 ? (
+            ) : !filteredTables || filteredTables.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-gray-400 text-center">
                 <TableIcon size={32} className="mb-3 opacity-20" />
                 <span className="text-sm">
@@ -181,7 +189,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
-                {filteredTables.map((table) => (
+                {(filteredTables || []).map((table) => (
                   <button
                     key={table.id}
                     onClick={() => {
