@@ -13,11 +13,13 @@ import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
 
-// ================= ВАЖНО: ИМПОРТЫ МУЛЬТИПЛЕЕРА =================
-import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
-import * as Y from "yjs";
-import { WebsocketProvider } from "y-websocket";
-// ===============================================================
+// ================= ВАЖНО: ИМПОРТЫ МУЛЬТИПЛЕЕРА (ВРЕМЕННО ОТКЛЮЧЕНЫ) =================
+// import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
+// import * as Y from "yjs";
+// import { WebsocketProvider } from "y-websocket";
+// Добавляем обычную историю вместо мультиплеера
+import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
+// ======================================================================================
 
 // Наши кастомные элементы
 import { editorTheme } from "./theme";
@@ -31,6 +33,11 @@ import { SlashMenuPlugin } from "./plugins/SlashMenuPlugin";
 import { CodeHighlightPlugin } from "./plugins/CodeHighlightPlugin";
 import { TopToolbarPlugin } from "./plugins/TopToolbarPlugin";
 import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
+import { PageSyncPlugin } from "./plugins/PageSyncPlugin";
+
+// === ИМПОРТИРУЕМ КОМАНДУ ДЛЯ ВСТАВКИ ТАБЛИЦЫ ===
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { INSERT_MWS_TABLE_COMMAND } from "./plugins/SlashMenuPlugin";
 
 const editorConfig = {
   namespace: "WikiLiveEditor",
@@ -52,43 +59,27 @@ const editorConfig = {
   theme: editorTheme,
 };
 
+// Вспомогательный компонент для работы с модалкой внутри контекста Lexical
+function EditorModalLogic({ isMwsModalOpen, setIsMwsModalOpen }) {
+  const [editor] = useLexicalComposerContext();
+
+  return (
+    <MwsSelectorModal
+      isOpen={isMwsModalOpen}
+      onClose={() => setIsMwsModalOpen(false)}
+      onSelectTable={(tableId, tableName) => {
+        console.log("Вставляем таблицу MWS:", tableId, tableName);
+        // ОТПРАВЛЯЕМ КОМАНДУ ЛЕКСИКАЛУ НА ВСТАВКУ ТАБЛИЦЫ
+        editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, { tableId });
+      }}
+    />
+  );
+}
+
 // Передаем pageId в пропсы (по умолчанию тестовая страница)
 export default function Editor({ pageId = "demo-page-123" }) {
   // === СТЕЙТ ДЛЯ МОДАЛКИ MWS ===
   const [isMwsModalOpen, setIsMwsModalOpen] = useState(false);
-
-  // НАСТРОЙКА ПОДКЛЮЧЕНИЯ К DJANGO CHANNELS
-  const providerFactory = (id, yjsDocMap) => {
-    const doc = new Y.Doc();
-    yjsDocMap.set(id, doc);
-
-    // TODO: В будущем здесь будет реальный токен из LocalStorage / Context
-    const token = "dummy_jwt_token_here";
-
-    // Формируем URL для подключения.
-    // y-websocket под капотом склеивает serverUrl + '/' + roomName.
-    // Чтобы попасть точно в твой Django-роутинг, мы разбиваем путь так:
-    const wsServerUrl = "ws://localhost:8000";
-    const roomName = `ws/pages/${id}/?token=${token}`;
-
-    const provider = new WebsocketProvider(wsServerUrl, roomName, doc, {
-      connect: true,
-    });
-
-    // Настройка онлайн-курсора (Awareness)
-    // Эти данные полетят по сокетам всем остальным пользователям на странице
-    provider.awareness.setLocalStateField("user", {
-      name: "Ксения",
-      color: "#FF0032", // Тот самый фирменный красный
-    });
-
-    // Для отладки сокетов
-    provider.on("status", (event) => {
-      console.log(`WebSocket Status [${id}]:`, event.status);
-    });
-
-    return provider;
-  };
 
   return (
     <LexicalComposer initialConfig={editorConfig}>
@@ -116,13 +107,8 @@ export default function Editor({ pageId = "demo-page-123" }) {
         </div>
       </div>
 
-      {/* МУЛЬТИПЛЕЕР (Заменяет стандартный HistoryPlugin) */}
-      <CollaborationPlugin
-        id={pageId}
-        providerFactory={providerFactory}
-        shouldBootstrap={true}
-        username="Ксения"
-      />
+      {/* ЛОКАЛЬНАЯ ИСТОРИЯ (CTRL+Z) */}
+      <HistoryPlugin />
 
       <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
       <ListPlugin />
@@ -130,20 +116,19 @@ export default function Editor({ pageId = "demo-page-123" }) {
       <LinkPlugin />
       <ClickableLinkPlugin />
 
-      {/* ПРОКИДЫВАЕМ ФУНКЦИЮ В СЛЭШ-МЕНЮ */}
-      <SlashMenuPlugin openMwsModal={() => setIsMwsModalOpen(true)} />
-
       <DragDropImagePlugin />
       <CodeHighlightPlugin />
 
-      {/* МОДАЛКА ВЫБОРА ТАБЛИЦЫ MWS */}
-      <MwsSelectorModal
-        isOpen={isMwsModalOpen}
-        onClose={() => setIsMwsModalOpen(false)}
-        onSelectTable={(tableId, tableName) => {
-          console.log("Вставляем таблицу MWS:", tableId, tableName);
-          alert(`Скоро тут вставится таблица: ${tableName}`);
-        }}
+      {/* АВТОСОХРАНЕНИЕ И ЗАГРУЗКА СТРАНИЦ */}
+      <PageSyncPlugin pageId={pageId} />
+
+      {/* СЛЭШ-МЕНЮ */}
+      <SlashMenuPlugin openMwsModal={() => setIsMwsModalOpen(true)} />
+
+      {/* ЛОГИКА ВСТАВКИ И МОДАЛКА */}
+      <EditorModalLogic
+        isMwsModalOpen={isMwsModalOpen}
+        setIsMwsModalOpen={setIsMwsModalOpen}
       />
     </LexicalComposer>
   );

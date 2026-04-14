@@ -46,7 +46,7 @@ export const api = {
   getSpaces: () => request("/spaces/"),
 
   getPagesTree: (spaceId) => request(`/spaces/${spaceId}/pages/`),
-
+  getPage: (pageId) => request(`/pages/${pageId}/`),
   createPage: (spaceId, data) =>
     request(`/spaces/${spaceId}/pages/`, {
       method: "POST",

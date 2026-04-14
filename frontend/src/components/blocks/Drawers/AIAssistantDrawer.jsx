@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, Loader2 } from "lucide-react";
 import { Drawer } from "./Drawer";
-import { api } from "../../services/api"; // Проверь путь до твоеного api.js
+// СТАЛО (правильно, выходит в папку src и заходит в services)
+import { api } from "../../../services/api";
 
 // Обрати внимание: я добавил pageId в пропсы, чтобы бэкенд знал, какой текст анализировать
 export function AIAssistantDrawer({ isOpen, onClose, pageId }) {
