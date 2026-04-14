@@ -567,8 +567,15 @@ def ai_chat_process_task(self, user_id: int, page_id: str = None, message: str =
                 # Добавляем связанные страницы
                 outgoing = page.outgoing_links.all()[:3]
                 if outgoing:
-                    links_text = ", ".join([p.title for p in outgoing])
-                    page_context += f"\n\nСВЯЗАННЫЕ СТРАНИЦЫ: {links_text}"
+                    links_text = ", ".join([p.target.title for p in outgoing])
+                    page_context += f"\n\"ЭТА СТРАНИЦА ССЫЛАЕТСЯ НА: {links_text}"
+
+                incoming = page.incoming_links.all()[:3]
+                if outgoing:
+                    links_text2 = ", ".join([p.source.title for p in incoming])
+                    page_context += f"\n\"НА ЭТУ СТРАНИЦУ ССЫЛАЮТСЯ: {links_text2}"
+
+
             except WikiPage.DoesNotExist:
                 pass
         

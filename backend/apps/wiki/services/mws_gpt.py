@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 client = OpenAI(
     api_key=settings.MWS_GPT_API_KEY,
     base_url=settings.MWS_GPT_BASE_URL,
-    timeout=30.0,  # Таймаут 30 секунд
+    timeout=300.0,  # Таймаут 30 секунд
     max_retries=3  # Автоматические ретраи при ошибках
 )
 
@@ -383,7 +383,8 @@ class MWSGPTService:
                 ],
                 temperature=0.0,  # Строгая детерминированность
                 max_tokens=12000, # Для больших документов
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"}, 
+                timeout=520, 
             )
             
             raw_content = response.choices[0].message.content.strip()
