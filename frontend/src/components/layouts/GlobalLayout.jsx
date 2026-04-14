@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { ShareModal } from "../blocks/Modals/ShareModal";
 import { CommandPalette } from "../blocks/Modals/CommandPalette";
-// === ИМПОРТ НАШЕЙ НОВОЙ МОДАЛКИ ===
+import { AIReportModal } from "../blocks/Modals/AIReportModal";
 import { SmartImportModal } from "../blocks/Modals/SmartImportModal";
 import {
   Search,
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Folder,
   FileText,
+  FileBarChart, // Добавили иконку для отчетов
 } from "lucide-react";
 
 export function GlobalLayout({ children, onPageSelect }) {
@@ -26,12 +27,16 @@ export function GlobalLayout({ children, onPageSelect }) {
   const [currentSpaceId, setCurrentSpaceId] = useState(null);
   const [isTreeLoading, setIsTreeLoading] = useState(true);
 
+  // === СТЕЙТЫ ПЕРЕИМЕНОВАНИЯ СТРАНИЦ ===
+  const [editingPageId, setEditingPageId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
   // === СТЕЙТЫ UI ===
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  // === СТЕЙТ ДЛЯ ИМПОРТА ===
+  const [isAIReportOpen, setIsAIReportOpen] = useState(false);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
 
   // === ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ===
@@ -67,6 +72,7 @@ export function GlobalLayout({ children, onPageSelect }) {
     fetchTree();
   }, []);
 
+  // Раскрытие папок
   const toggleFolder = (folderId) => {
     const toggleNode = (nodes) =>
       nodes.map((node) => {
@@ -76,6 +82,29 @@ export function GlobalLayout({ children, onPageSelect }) {
         return node;
       });
     setFileTree(toggleNode(fileTree));
+  };
+
+  // Переименование
+  const handleRenameSubmit = async (pageId) => {
+    if (!editingTitle.trim()) {
+      setEditingPageId(null);
+      return;
+    }
+    try {
+      await api.updatePage(pageId, { title: editingTitle });
+      const updateTreeName = (nodes) =>
+        nodes.map((node) => {
+          if (node.id === pageId) return { ...node, name: editingTitle };
+          if (node.children)
+            return { ...node, children: updateTreeName(node.children) };
+          return node;
+        });
+      setFileTree(updateTreeName(fileTree));
+    } catch (error) {
+      console.error("Ошибка переименования:", error);
+    } finally {
+      setEditingPageId(null);
+    }
   };
 
   const handleCreateFile = async () => {
@@ -170,7 +199,33 @@ export function GlobalLayout({ children, onPageSelect }) {
               size={14}
               className="text-gray-400 group-hover:text-[#FF0032] shrink-0"
             />
-            <span className="truncate">{node.name}</span>
+
+            {/* ЛОГИКА ПЕРЕИМЕНОВАНИЯ */}
+            {editingPageId === node.id ? (
+              <input
+                autoFocus
+                value={editingTitle}
+                onChange={(e) => setEditingTitle(e.target.value)}
+                onBlur={() => handleRenameSubmit(node.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRenameSubmit(node.id);
+                  if (e.key === "Escape") setEditingPageId(null);
+                }}
+                className="flex-1 bg-white border border-[#FF0032] rounded px-1 py-0.5 text-sm text-gray-900 outline-none w-full ml-1"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span
+                className="truncate flex-1 text-left"
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setEditingTitle(node.name);
+                  setEditingPageId(node.id);
+                }}
+              >
+                {node.name}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -188,19 +243,28 @@ export function GlobalLayout({ children, onPageSelect }) {
         onClose={() => setIsCommandPaletteOpen(false)}
       />
 
-      {/* === МОДАЛКА УМНОГО ИМПОРТА === */}
+      {/* === МОДАЛКИ ИИ === */}
       <SmartImportModal
         isOpen={isSmartImportOpen}
         onClose={() => setIsSmartImportOpen(false)}
         currentSpaceId={currentSpaceId}
         onImportSuccess={(pageId) => {
-          // При успехе перезапрашиваем дерево файлов, чтобы появилась новая страница
           fetchTree();
-          // И сразу открываем её в редакторе
           if (onPageSelect) onPageSelect(pageId);
         }}
       />
 
+      <AIReportModal
+        isOpen={isAIReportOpen}
+        onClose={() => setIsAIReportOpen(false)}
+        currentSpaceId={currentSpaceId}
+        onReportSuccess={(pageId) => {
+          fetchTree();
+          if (onPageSelect) onPageSelect(pageId);
+        }}
+      />
+
+      {/* === УЗКИЙ САЙДБАР === */}
       <aside className="w-14 flex flex-col items-center py-3 border-r border-gray-200 bg-white shrink-0 z-20 justify-between shadow-[1px_0_4px_rgba(0,0,0,0.02)] relative">
         <div className="flex flex-col items-center gap-5 w-full">
           <button className="w-8 h-8 bg-[#FF0032] rounded-lg text-white flex items-center justify-center font-wide font-bold text-sm mb-2 hover:bg-[#CC0028] shadow-sm">
@@ -222,16 +286,28 @@ export function GlobalLayout({ children, onPageSelect }) {
             <Globe size={20} />
           </button>
         </div>
-        <div className="flex flex-col items-center gap-5 w-full mb-2">
+
+        {/* КНОПКА ГЕНЕРАЦИИ ОТЧЕТА И НАСТРОЙКИ */}
+        <div className="flex flex-col items-center gap-4 w-full mb-4">
+          <button
+            onClick={() => setIsAIReportOpen(true)}
+            className="w-10 h-10 bg-purple-50 hover:bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 transition-colors shadow-sm group relative"
+          >
+            <FileBarChart size={20} />
+            <span className="absolute left-14 bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+              AI Аналитика
+            </span>
+          </button>
           <button className="text-gray-400 hover:text-gray-800 transition-colors">
             <Settings size={20} />
           </button>
-          <button className="w-8 h-8 bg-gray-900 rounded-full text-white flex items-center justify-center font-bold text-xs mt-2 border-2 border-white shadow-sm hover:scale-105 transition-transform">
+          <button className="w-8 h-8 bg-gray-900 rounded-full text-white flex items-center justify-center font-bold text-xs border-2 border-white shadow-sm hover:scale-105 transition-transform">
             K
           </button>
         </div>
       </aside>
 
+      {/* === ШИРОКИЙ САЙДБАР (ПРОВОДНИК) === */}
       <aside
         className={`border-r border-gray-200 flex flex-col bg-gray-50/50 shrink-0 z-10 justify-between transition-all duration-300 ease-in-out ${isSidebarOpen ? "w-[280px] opacity-100" : "w-0 opacity-0 overflow-hidden border-none"}`}
       >
@@ -305,7 +381,6 @@ export function GlobalLayout({ children, onPageSelect }) {
             )}
           </div>
 
-          {/* === НАША КНОПКА ИМПОРТА === */}
           <button
             onClick={() => setIsSmartImportOpen(true)}
             className="flex-1 border border-gray-200 hover:border-[#FF0032] text-gray-700 hover:text-[#FF0032] hover:bg-[#FFEBED] text-sm font-wide font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm"
@@ -315,6 +390,7 @@ export function GlobalLayout({ children, onPageSelect }) {
         </div>
       </aside>
 
+      {/* === РАБОЧАЯ ОБЛАСТЬ === */}
       <main className="flex-1 flex flex-col min-w-0 bg-white relative z-30 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -335,10 +411,6 @@ export function GlobalLayout({ children, onPageSelect }) {
             <span className="mx-2 text-gray-300">/</span>
             <span className="hover:text-gray-900 cursor-pointer transition-colors">
               WikiLive Team
-            </span>
-            <span className="mx-2 text-gray-300">/</span>
-            <span className="text-gray-900 font-bold">
-              Архитектура WikiLive
             </span>
           </div>
           <div className="flex items-center gap-4">

@@ -34,7 +34,7 @@ import { CodeHighlightPlugin } from "./plugins/CodeHighlightPlugin";
 import { TopToolbarPlugin } from "./plugins/TopToolbarPlugin";
 import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
 import { PageSyncPlugin } from "./plugins/PageSyncPlugin";
-
+import { AIFloatingMenuPlugin } from "./plugins/AIFloatingMenuPlugin";
 // === ИМПОРТИРУЕМ КОМАНДУ ДЛЯ ВСТАВКИ ТАБЛИЦЫ ===
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { INSERT_MWS_TABLE_COMMAND } from "./plugins/SlashMenuPlugin";
@@ -118,7 +118,7 @@ export default function Editor({ pageId = "demo-page-123" }) {
 
       <DragDropImagePlugin />
       <CodeHighlightPlugin />
-
+      <AIFloatingMenuPlugin />
       {/* АВТОСОХРАНЕНИЕ И ЗАГРУЗКА СТРАНИЦ */}
       <PageSyncPlugin pageId={pageId} />
 

@@ -88,6 +88,24 @@ export const api = {
       }),
     }),
 
+  // Редактирование текста (Inline AI)
+  editText: (text, action, context = "") =>
+    request("/ai/edit-text/", {
+      method: "POST",
+      body: JSON.stringify({ text, action, context }),
+    }),
+
+  generateReport: (dstId, spaceId, prompt, reportType = "summary") =>
+    request("/ai/generate-report/", {
+      method: "POST",
+      body: JSON.stringify({
+        dst_id: dstId,
+        space_id: spaceId,
+        prompt,
+        limit: 100,
+        report_type: reportType,
+      }),
+    }),
   checkTaskStatus: (taskId) => request(`/ai/tasks/${taskId}/`),
 
   // === 5. СОХРАНЕНИЕ СТРАНИЦЫ (AutoSave) ===
