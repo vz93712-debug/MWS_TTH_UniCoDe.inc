@@ -179,31 +179,178 @@ class MWSGPTService:
 1. СОХРАНЯЙ 100% ИСХОДНОГО ТЕКСТА. Никаких сокращений, перефразирований, добавлений или удаления информации.
 2. СТРУКТУРА ДОЛЖНА СОВПАДАТЬ 1:1. Заголовки → заголовки, списки → списки, код → код.
 3. Возвращай ТОЛЬКО валидный JSON. Без пояснений, без markdown-обёрток, без текста до/после.
-4. Используй стандартную схему Lexical EditorState:
+4. Используй стандартную схему Lexical EditorState (см. ниже).
+
+📐 СТРУКТУРА ROOT:
 {
   "root": {
     "type": "root",
-    "children": [ ...nodes... ],
-    "direction": "ltr",
+    "children": [...nodes...],
+    "direction": null,
     "format": "",
     "indent": 0,
-    "version": 1
+    "version": 1,
+    "textStyle": "",
+    "textFormat": 0
   }
 }
 
 📐 МАППИНГ УЗЛОВ:
-• Текст/Параграф → {"type": "paragraph", "children": [{"type": "text", "text": "...", "format": 0, "mode": "normal", "style": "", "version": 1}]}
-• Заголовки (#, ##, ###) → {"type": "heading", "level": N, "children": [...]}
-• Маркированный список (-, *) → {"type": "list", "listType": "bullet", "children": [{"type": "listitem", "value": N, "children": [...]}]}
-• Нумерованный список (1., 2.) → {"type": "list", "listType": "number", "children": [...]}
-• Жирный → "format": 1, Курсив → "format": 2, Код → "format": 16
-• Ссылки [text](url) → {"type": "link", "url": "...", "children": [{"type": "text", "text": "...", "format": 0}]}
-• Картинки ![alt](url) → {"type": "image", "src": "...", "alt": "...", "width": 800, "height": 600, "maxWidth": "100%"}
-• Таблицы |...| → {"type": "table", "children": [{"type": "tablerow", "children": [{"type": "tablecell", "colSpan": 1, "rowSpan": 1, "headerState": 1, "children": [...]}]}]}
-• Код-блоки ``` → {"type": "code", "language": "...", "children": [{"type": "text", "text": "...", "format": 0}]}
+
+• Параграф:
+{
+  "type": "paragraph",
+  "children": [{"type": "text", "text": "...", "format": 0, "mode": "normal", "style": "", "detail": 0, "version": 1}],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1,
+  "textStyle": "",
+  "textFormat": 0
+}
+
+• Заголовки (H1, H2, H3):
+{
+  "type": "heading",
+  "tag": "h1|h2|h3",
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Маркированный список:
+{
+  "type": "list",
+  "listType": "bullet",
+  "tag": "ul",
+  "start": 1,
+  "children": [{"type": "listitem", "value": 1, "children": [...]}],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Нумерованный список:
+{
+  "type": "list",
+  "listType": "number",
+  "tag": "ol",
+  "start": 1,
+  "children": [...]
+}
+
+• Чек-лист:
+{
+  "type": "list",
+  "listType": "check",
+  "tag": "ul",
+  "children": [{"type": "listitem", "value": 1, "checked": false, "children": [...]}]
+}
+
+• Элемент списка:
+{
+  "type": "listitem",
+  "value": 1,
+  "checked": false,
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Текстовый узел:
+{
+  "type": "text",
+  "text": "...",
+  "format": 0,
+  "mode": "normal",
+  "style": "",
+  "detail": 0,
+  "version": 1
+}
+
+• Форматирование текста (битовые флаги):
+  - Обычный: format: 0
+  - Жирный: format: 1
+  - Курсив: format: 2
+  - Зачеркнутый: format: 4
+  - Подчеркнутый: format: 8
+  - Комбинированный (жирный+курсив): format: 3 (1+2)
+
+• Стили текста:
+  - Цвет: "style": "color: #FF0032;"
+  - Фон: "style": "background-color: #FFEBED;"
+
+• Ссылка:
+{
+  "type": "link",
+  "url": "...",
+  "children": [{"type": "text", "text": "...", "format": 0}],
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Изображение:
+{
+  "type": "image",
+  "src": "...",
+  "alt": "...",
+  "width": 800,
+  "height": 600,
+  "maxWidth": "100%",
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Таблица:
+{
+  "type": "table",
+  "children": [
+    {"type": "tablerow", "children": [{"type": "tablecell", "colSpan": 1, "rowSpan": 1, "headerState": 1, "children": [...]}]}
+  ],
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Код-блок:
+{
+  "type": "code",
+  "language": "javascript|python|...",
+  "children": [{"type": "code-highlight", "text": "...", "format": 0, "mode": "normal", "style": "", "detail": 0, "version": 1, "highlightType": "operator|number|function|string|punctuation|null"}],
+  "format": "",
+  "indent": 0,
+  "version": 1,
+  "direction": null
+}
+
+• Цитата:
+{
+  "type": "quote",
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Перенос строки:
+{
+  "type": "linebreak",
+  "version": 1
+}
 
 ⚠️ ВАЖНО:
-• Если элемент не распознан, помести его в "paragraph" как есть.
+• Все узлы должны содержать обязательные поля: type, version, children (если применимо), direction, format, indent.
+• Текстовые узлы внутри параграфов/заголовков всегда в массиве children.
+• Для code-highlight используй highlightType: null для обычного текста внутри кода.
+• Если элемент не распознан, помести его в paragraph как text-узел.
 • Не добавляй поля, которых нет в схеме.
 • Начинай ответ с { и заканчивай }."""
 
@@ -214,30 +361,140 @@ class MWSGPTService:
 1. Возвращай ТОЛЬКО валидный Lexical EditorState JSON. Без пояснений, без markdown, без текста до/после.
 2. Начинай ответ с { и заканчивай }.
 3. Сохраняй все факты из данных. НЕ выдумывай цифры или выводы.
-4. Используй стандартную схему Lexical: root -> children -> [heading, paragraph, table, list, code, image]
+4. Используй стандартную схему Lexical (см. ниже).
 5. Структура отчёта должна быть логичной:
    - H1: Название отчёта
    - H2: Введение / Цель анализа
    - Параграфы / Списки: Ключевые выводы
-   - Таблица (если уместно): {"type": "table", "children": [{"type": "tablerow", "children": [{"type": "tablecell", "colSpan": 1, "rowSpan": 1, "headerState": 1, "children": [...]}]}]}
+   - Таблица (если уместно)
    - H2: Детализация / Рекомендации
    - Параграф: Заключение
 6. Если данных мало — укажи это честно в тексте.
 7. НЕ добавляй поля, которых нет в схеме Lexical.
 
-СТРУКТУРА ОТВЕТА:
+📐 СТРУКТУРА ROOT:
 {
   "root": {
     "type": "root",
-    "children": [ ...nodes... ],
-    "direction": "ltr",
+    "children": [...nodes...],
+    "direction": null,
     "format": "",
     "indent": 0,
-    "version": 1
+    "version": 1,
+    "textStyle": "",
+    "textFormat": 0
   }
 }
 
-НЕ добавляй ничего кроме JSON."""
+📐 МАППИНГ УЗЛОВ ДЛЯ ОТЧЁТА:
+
+• Параграф:
+{
+  "type": "paragraph",
+  "children": [{"type": "text", "text": "...", "format": 0, "mode": "normal", "style": "", "detail": 0, "version": 1}],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1,
+  "textStyle": "",
+  "textFormat": 0
+}
+
+• Заголовки (H1, H2, H3):
+{
+  "type": "heading",
+  "tag": "h1|h2|h3",
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Маркированный список:
+{
+  "type": "list",
+  "listType": "bullet",
+  "tag": "ul",
+  "start": 1,
+  "children": [{"type": "listitem", "value": 1, "children": [...]}],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Нумерованный список:
+{
+  "type": "list",
+  "listType": "number",
+  "tag": "ol",
+  "start": 1,
+  "children": [...]
+}
+
+• Элемент списка:
+{
+  "type": "listitem",
+  "value": 1,
+  "checked": false,
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Текстовый узел:
+{
+  "type": "text",
+  "text": "...",
+  "format": 0,
+  "mode": "normal",
+  "style": "",
+  "detail": 0,
+  "version": 1
+}
+
+• Форматирование текста (битовые флаги):
+  - Обычный: format: 0
+  - Жирный: format: 1 (для акцентов в выводах)
+  - Курсив: format: 2
+
+• Таблица в отчёте:
+{
+  "type": "table",
+  "children": [
+    {"type": "tablerow", "children": [
+      {"type": "tablecell", "colSpan": 1, "rowSpan": 1, "headerState": 1, "children": [
+        {"type": "paragraph", "children": [{"type": "text", "text": "Заголовок", "format": 1}]}
+      ]}
+    ]}
+  ],
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+• Цитата для выделения ключевых рекомендаций:
+{
+  "type": "quote",
+  "children": [...],
+  "direction": null,
+  "format": "",
+  "indent": 0,
+  "version": 1
+}
+
+⚠️ ВАЖНО:
+• Все узлы должны содержать обязательные поля: type, version, children (если применимо), direction, format, indent.
+• Текстовые узлы внутри параграфов/заголовков всегда в массиве children.
+• Для таблиц: headerState: 1 для ячеек заголовка, 0 для обычных.
+• Используй нумерованные списки для пошаговых рекомендаций, маркированные — для перечислений.
+• Жирный текст (format: 1) применяй для выделения ключевых метрик и выводов.
+• Если элемент не распознан, помести его в paragraph как text-узел.
+• Не добавляй поля, которых нет в схеме.
+• Начинай ответ с { и заканчивай }."""
 
     SYSTEM_SUMMARIZER = """Ты — профессиональный редактор и аналитик документов.
 Твоя задача: создать краткое, точное резюме текста.
