@@ -15,16 +15,16 @@ import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
 } from "@lexical/list";
+import { INSERT_TABLE_COMMAND } from "@lexical/table";
 import { $createMwsTableNode } from "../nodes/MwsTableNode";
 import { SlashMenu } from "../../../components/blocks/Popovers/SlashMenu";
 
-// ЭКСПОРТИРУЕМ команду, чтобы её можно было вызвать из Editor.jsx после выбора в модалке
-// eslint-disable-next-line react-refresh/only-export-components
+// Возвращаем команду прямо в плагин
 export const INSERT_MWS_TABLE_COMMAND = createCommand(
   "INSERT_MWS_TABLE_COMMAND",
 );
 
-export function SlashMenuPlugin({ openMwsModal }) {
+export function SlashMenuPlugin() {
   const [editor] = useLexicalComposerContext();
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState({ x: 0, y: 0 });
@@ -38,20 +38,15 @@ export function SlashMenuPlugin({ openMwsModal }) {
             const range = domSelection.getRangeAt(0);
             const rect = range.getBoundingClientRect();
 
-            // УМНОЕ ПОЗИЦИОНИРОВАНИЕ
             const menuHeight = 350;
             const spaceBelow = window.innerHeight - rect.bottom;
-
             let yPos = rect.bottom + window.scrollY + 10;
 
             if (spaceBelow < menuHeight) {
               yPos = Math.max(10, rect.top + window.scrollY - menuHeight - 10);
             }
 
-            setCoords({
-              x: rect.left,
-              y: yPos,
-            });
+            setCoords({ x: rect.left, y: yPos });
             setIsOpen(true);
           }
         }, 50);
@@ -66,7 +61,7 @@ export function SlashMenuPlugin({ openMwsModal }) {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  // Регистрируем команду вставки нашей таблицы MWS
+  // Слушаем команду и вставляем блок (Мини-Notion)
   useEffect(() => {
     return editor.registerCommand(
       INSERT_MWS_TABLE_COMMAND,
@@ -88,14 +83,13 @@ export function SlashMenuPlugin({ openMwsModal }) {
     (itemId) => {
       editor.focus();
 
-      // Сначала удаляем слэш в редакторе
+      // Удаляем слэш и применяем текстовые блоки
       editor.update(() => {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
           selection.modify("extend", "backward", "character");
           selection.removeText();
 
-          // Если это НЕ таблица, применяем стили сразу
           if (itemId !== "mws-table" && itemId !== "table") {
             try {
               switch (itemId) {
@@ -133,20 +127,30 @@ export function SlashMenuPlugin({ openMwsModal }) {
                   break;
               }
             } catch (err) {
-              console.error("Ошибка вставки блока:", err);
+              console.error("Ошибка вставки:", err);
             }
           }
         }
       });
 
-      // Если выбрали таблицу — открываем модалку!
-      if (itemId === "mws-table" || itemId === "table") {
-        if (openMwsModal) openMwsModal();
+      // === ПРЯМАЯ ВСТАВКА ТАБЛИЦ БЕЗ МОДАЛКИ ===
+      if (itemId === "mws-table") {
+        // Создаем новую пустую базу с уникальным ID
+        editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, {
+          tableId: `local-db-${Date.now()}`,
+        });
+      } else if (itemId === "table") {
+        // Обычная ручная таблица
+        editor.dispatchCommand(INSERT_TABLE_COMMAND, {
+          columns: "3",
+          rows: "3",
+          includeHeaders: true,
+        });
       }
 
       setIsOpen(false);
     },
-    [editor, openMwsModal],
+    [editor],
   );
 
   return (

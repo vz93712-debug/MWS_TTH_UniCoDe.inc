@@ -1,6 +1,4 @@
-import { useState } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
-// === 1. ИМПОРТ КОНТЕКСТА СОВМЕСТНОЙ РАБОТЫ ===
 import { CollaborationContext } from "@lexical/react/LexicalCollaborationContext";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -15,21 +13,15 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
-// ИМПОРТЫ ДЛЯ СТАНДАРТНЫХ ТАБЛИЦ
 import { TableNode, TableCellNode, TableRowNode } from "@lexical/table";
 import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
 
 import { editorTheme } from "./theme";
 import { MwsTableNode } from "./nodes/MwsTableNode";
 import { ImageNode } from "./nodes/ImageNode";
-import { MwsSelectorModal } from "../../components/blocks/Modals/MwsSelectorModal";
 import { DragDropImagePlugin } from "./plugins/DragDropImagePlugin";
-import {
-  SlashMenuPlugin,
-  INSERT_MWS_TABLE_COMMAND,
-} from "./plugins/SlashMenuPlugin";
+import { SlashMenuPlugin } from "./plugins/SlashMenuPlugin";
 import { CodeHighlightPlugin } from "./plugins/CodeHighlightPlugin";
 import { TopToolbarPlugin } from "./plugins/TopToolbarPlugin";
 import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
@@ -50,7 +42,6 @@ const editorConfig = {
     AutoLinkNode,
     MwsTableNode,
     ImageNode,
-    // === ВОЗВРАЩАЕМ УЗЛЫ ДЛЯ РУЧНЫХ ТАБЛИЦ ===
     TableNode,
     TableCellNode,
     TableRowNode,
@@ -61,38 +52,19 @@ const editorConfig = {
   theme: editorTheme,
 };
 
-function EditorModalLogic({ isMwsModalOpen, setIsMwsModalOpen }) {
-  const [editor] = useLexicalComposerContext();
-
-  return (
-    <MwsSelectorModal
-      isOpen={isMwsModalOpen}
-      onClose={() => setIsMwsModalOpen(false)}
-      onSelectTable={(tableId) => {
-        editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, { tableId });
-      }}
-    />
-  );
-}
-
-// === 2. СОЗДАЕМ ГЛОБАЛЬНУЮ КАРТУ ДЛЯ СОКЕТОВ ===
 const yjsDocMap = new Map();
-// Добавляем генерацию случайного цвета и имени для мультиплеера
 const CURSOR_COLORS = ["#FF0032", "#00B4D8", "#00CC66", "#FFB703", "#9D4EDD"];
 const myColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
 const myName = "User " + Math.floor(Math.random() * 100);
 
 export default function Editor({ pageId = "demo-page-123" }) {
-  const [isMwsModalOpen, setIsMwsModalOpen] = useState(false);
-
   return (
-    // === 3. ОБЕРТЫВАЕМ РЕДАКТОР В ПРОВАЙДЕР СОВМЕСТНОЙ РАБОТЫ ===
     <CollaborationContext.Provider
       value={{
         isCollabActive: true,
         yjsDocMap: yjsDocMap,
-        name: myName, // У каждого будет случайное имя "User 42", "User 87" и т.д.
-        color: myColor, // И свой уникальный цвет курсора
+        name: myName,
+        color: myColor,
       }}
     >
       <LexicalComposer initialConfig={editorConfig}>
@@ -120,30 +92,22 @@ export default function Editor({ pageId = "demo-page-123" }) {
           </div>
         </div>
 
-        {/* Наш Yjs Collaboration провайдер */}
         <YjsProvider documentId={pageId} />
 
         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
         <ListPlugin />
         <CheckListPlugin />
-
-        {/* === ПЛАГИН ДЛЯ РУЧНЫХ ТАБЛИЦ === */}
         <TablePlugin />
-
         <LinkPlugin />
         <ClickableLinkPlugin />
 
         <DragDropImagePlugin />
         <CodeHighlightPlugin />
         <AIFloatingMenuPlugin />
-
         <PageSyncPlugin pageId={pageId} />
-        <SlashMenuPlugin openMwsModal={() => setIsMwsModalOpen(true)} />
 
-        <EditorModalLogic
-          isMwsModalOpen={isMwsModalOpen}
-          setIsMwsModalOpen={setIsMwsModalOpen}
-        />
+        {/* Чистое слэш-меню без пропсов модалки */}
+        <SlashMenuPlugin />
       </LexicalComposer>
     </CollaborationContext.Provider>
   );
