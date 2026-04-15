@@ -4,6 +4,8 @@ import { ShareModal } from "../blocks/Modals/ShareModal";
 import { CommandPalette } from "../blocks/Modals/CommandPalette";
 import { AIReportModal } from "../blocks/Modals/AIReportModal";
 import { SmartImportModal } from "../blocks/Modals/SmartImportModal";
+import { CommentsDrawer } from "../blocks/Drawers/CommentsDrawer";
+import { HistoryDrawer } from "../blocks/Drawers/HistoryDrawer";
 import {
   Search,
   Monitor,
@@ -18,7 +20,9 @@ import {
   ChevronDown,
   Folder,
   FileText,
-  FileBarChart, // Добавили иконку для отчетов
+  FileBarChart,
+  MessageSquare,
+  Clock,
 } from "lucide-react";
 
 export function GlobalLayout({ children, onPageSelect }) {
@@ -27,9 +31,10 @@ export function GlobalLayout({ children, onPageSelect }) {
   const [currentSpaceId, setCurrentSpaceId] = useState(null);
   const [isTreeLoading, setIsTreeLoading] = useState(true);
 
-  // === СТЕЙТЫ ПЕРЕИМЕНОВАНИЯ СТРАНИЦ ===
+  // === СТЕЙТЫ ПЕРЕИМЕНОВАНИЯ И ВЫБОРА СТРАНИЦ ===
   const [editingPageId, setEditingPageId] = useState(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [activePageId, setActivePageId] = useState(null);
 
   // === СТЕЙТЫ UI ===
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -38,6 +43,8 @@ export function GlobalLayout({ children, onPageSelect }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAIReportOpen, setIsAIReportOpen] = useState(false);
   const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // === ЗАГРУЗКА ДАННЫХ С БЭКЕНДА ===
   const fetchTree = async () => {
@@ -144,6 +151,7 @@ export function GlobalLayout({ children, onPageSelect }) {
       setIsCreateOpen(false);
 
       if (onPageSelect) onPageSelect(newPage.id);
+      setActivePageId(newPage.id);
     } catch (error) {
       console.error("Ошибка при создании страницы:", error);
     }
@@ -192,7 +200,10 @@ export function GlobalLayout({ children, onPageSelect }) {
           </>
         ) : (
           <button
-            onClick={() => onPageSelect && onPageSelect(node.id)}
+            onClick={() => {
+              if (onPageSelect) onPageSelect(node.id);
+              setActivePageId(node.id);
+            }}
             className={`w-full flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors group ${level === 0 ? "ml-4" : ""}`}
           >
             <FileText
@@ -251,6 +262,7 @@ export function GlobalLayout({ children, onPageSelect }) {
         onImportSuccess={(pageId) => {
           fetchTree();
           if (onPageSelect) onPageSelect(pageId);
+          setActivePageId(pageId);
         }}
       />
 
@@ -261,6 +273,7 @@ export function GlobalLayout({ children, onPageSelect }) {
         onReportSuccess={(pageId) => {
           fetchTree();
           if (onPageSelect) onPageSelect(pageId);
+          setActivePageId(pageId);
         }}
       />
 
@@ -414,6 +427,22 @@ export function GlobalLayout({ children, onPageSelect }) {
             </span>
           </div>
           <div className="flex items-center gap-4">
+            {/* === КНОПКИ ВЫЗОВА ПАНЕЛЕЙ (ЧАТ И ВЕРСИИ) === */}
+            <div className="flex items-center gap-1 mr-2 border-r border-gray-200 pr-4">
+              <button
+                onClick={() => setIsCommentsOpen(true)}
+                className="text-gray-400 hover:text-[#FF0032] hover:bg-gray-50 p-2 rounded-lg transition-colors"
+              >
+                <MessageSquare size={18} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => setIsHistoryOpen(true)}
+                className="text-gray-400 hover:text-[#FF0032] hover:bg-gray-50 p-2 rounded-lg transition-colors"
+              >
+                <Clock size={18} strokeWidth={2} />
+              </button>
+            </div>
+
             <div className="flex -space-x-1">
               <div className="w-7 h-7 rounded-full border-2 border-white bg-green-600 flex items-center justify-center text-white text-[11px] font-bold z-10 shadow-sm cursor-pointer hover:-translate-y-0.5 transition-transform">
                 K
@@ -437,6 +466,17 @@ export function GlobalLayout({ children, onPageSelect }) {
         <div className="flex-1 flex flex-col overflow-hidden relative">
           {children}
         </div>
+
+        {/* === САМИ ПАНЕЛИ === */}
+        <CommentsDrawer
+          isOpen={isCommentsOpen}
+          onClose={() => setIsCommentsOpen(false)}
+        />
+        <HistoryDrawer
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          pageId={activePageId}
+        />
       </main>
     </div>
   );

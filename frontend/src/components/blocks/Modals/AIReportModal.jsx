@@ -17,15 +17,22 @@ export function AIReportModal({
   const [status, setStatus] = useState("idle"); // idle, queued, processing, completed, error
   const [taskId, setTaskId] = useState(null);
 
-  // === ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР МАССИВОВ ===
+  // === АБСОЛЮТНО ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР ===
   const extractArray = (data) => {
     if (!data) return [];
     if (Array.isArray(data)) return data;
-    if (Array.isArray(data.results)) return data.results;
-    if (Array.isArray(data.data)) return data.data;
-    if (Array.isArray(data.spaces)) return data.spaces;
-    if (Array.isArray(data.nodes)) return data.nodes;
-    return []; // Возвращаем пустой массив, если ничего не подошло
+
+    if (typeof data === "object") {
+      if (Array.isArray(data.results)) return data.results;
+      if (Array.isArray(data.data)) return data.data;
+      if (Array.isArray(data.spaces)) return data.spaces;
+      if (Array.isArray(data.nodes)) return data.nodes;
+
+      const foundArray = Object.values(data).find((val) => Array.isArray(val));
+      if (foundArray) return foundArray;
+    }
+
+    return [];
   };
 
   // 1. Грузим пространства
@@ -47,6 +54,7 @@ export function AIReportModal({
         if (data.length > 0 && !selectedSpaceId) setSelectedSpaceId(data[0].id);
       } catch (e) {
         console.error("Ошибка загрузки пространств:", e);
+        setSpaces([]);
       }
     };
     fetchSpaces();
@@ -64,6 +72,7 @@ export function AIReportModal({
         if (data.length > 0) setSelectedTableId(data[0].id);
       } catch (e) {
         console.error("Ошибка загрузки таблиц:", e);
+        setTables([]);
       }
     };
     fetchTables();
@@ -117,6 +126,10 @@ export function AIReportModal({
     }
   };
 
+  // Гарантируем массивы для безопасного рендера
+  const safeSpaces = Array.isArray(spaces) ? spaces : [];
+  const safeTables = Array.isArray(tables) ? tables : [];
+
   if (!isOpen) return null;
 
   return (
@@ -155,10 +168,9 @@ export function AIReportModal({
                   onChange={(e) => setSelectedSpaceId(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-300 shadow-sm"
                 >
-                  {/* Защита рендера */}
-                  {(spaces || []).map((s) => (
+                  {safeSpaces.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name}
+                      {s.name || "Без имени"}
                     </option>
                   ))}
                 </select>
@@ -173,12 +185,12 @@ export function AIReportModal({
                   onChange={(e) => setSelectedTableId(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-300 shadow-sm"
                 >
-                  {(!tables || tables.length === 0) && (
+                  {safeTables.length === 0 && (
                     <option value="">Нет таблиц</option>
                   )}
-                  {(tables || []).map((t) => (
+                  {safeTables.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name}
+                      {t.name || "Без названия"}
                     </option>
                   ))}
                 </select>

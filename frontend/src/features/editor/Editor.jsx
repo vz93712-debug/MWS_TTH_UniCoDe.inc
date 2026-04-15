@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -12,32 +13,24 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { CheckListPlugin } from "@lexical/react/LexicalCheckListPlugin";
 import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
-// ================= ВАЖНО: ИМПОРТЫ МУЛЬТИПЛЕЕРА (ВРЕМЕННО ОТКЛЮЧЕНЫ) =================
-// import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
-// import * as Y from "yjs";
-// import { WebsocketProvider } from "y-websocket";
-// Добавляем обычную историю вместо мультиплеера
-import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
-// ======================================================================================
-
-// Наши кастомные элементы
 import { editorTheme } from "./theme";
 import { MwsTableNode } from "./nodes/MwsTableNode";
 import { ImageNode } from "./nodes/ImageNode";
-import { useState } from "react";
 import { MwsSelectorModal } from "../../components/blocks/Modals/MwsSelectorModal";
-// Наши плагины
+
 import { DragDropImagePlugin } from "./plugins/DragDropImagePlugin";
-import { SlashMenuPlugin } from "./plugins/SlashMenuPlugin";
+import {
+  SlashMenuPlugin,
+  INSERT_MWS_TABLE_COMMAND,
+} from "./plugins/SlashMenuPlugin";
 import { CodeHighlightPlugin } from "./plugins/CodeHighlightPlugin";
 import { TopToolbarPlugin } from "./plugins/TopToolbarPlugin";
 import { FloatingToolbarPlugin } from "./plugins/FloatingToolbarPlugin";
 import { PageSyncPlugin } from "./plugins/PageSyncPlugin";
 import { AIFloatingMenuPlugin } from "./plugins/AIFloatingMenuPlugin";
-// === ИМПОРТИРУЕМ КОМАНДУ ДЛЯ ВСТАВКИ ТАБЛИЦЫ ===
-import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { INSERT_MWS_TABLE_COMMAND } from "./plugins/SlashMenuPlugin";
+import { YjsProvider } from "../collaboration/YjsProvider";
 
 const editorConfig = {
   namespace: "WikiLiveEditor",
@@ -59,7 +52,6 @@ const editorConfig = {
   theme: editorTheme,
 };
 
-// Вспомогательный компонент для работы с модалкой внутри контекста Lexical
 function EditorModalLogic({ isMwsModalOpen, setIsMwsModalOpen }) {
   const [editor] = useLexicalComposerContext();
 
@@ -67,18 +59,14 @@ function EditorModalLogic({ isMwsModalOpen, setIsMwsModalOpen }) {
     <MwsSelectorModal
       isOpen={isMwsModalOpen}
       onClose={() => setIsMwsModalOpen(false)}
-      onSelectTable={(tableId, tableName) => {
-        console.log("Вставляем таблицу MWS:", tableId, tableName);
-        // ОТПРАВЛЯЕМ КОМАНДУ ЛЕКСИКАЛУ НА ВСТАВКУ ТАБЛИЦЫ
+      onSelectTable={(tableId) => {
         editor.dispatchCommand(INSERT_MWS_TABLE_COMMAND, { tableId });
       }}
     />
   );
 }
 
-// Передаем pageId в пропсы (по умолчанию тестовая страница)
 export default function Editor({ pageId = "demo-page-123" }) {
-  // === СТЕЙТ ДЛЯ МОДАЛКИ MWS ===
   const [isMwsModalOpen, setIsMwsModalOpen] = useState(false);
 
   return (
@@ -107,8 +95,8 @@ export default function Editor({ pageId = "demo-page-123" }) {
         </div>
       </div>
 
-      {/* ЛОКАЛЬНАЯ ИСТОРИЯ (CTRL+Z) */}
-      <HistoryPlugin />
+      {/* Yjs Collaboration (заменяет HistoryPlugin) */}
+      <YjsProvider documentId={pageId} />
 
       <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
       <ListPlugin />
@@ -119,13 +107,10 @@ export default function Editor({ pageId = "demo-page-123" }) {
       <DragDropImagePlugin />
       <CodeHighlightPlugin />
       <AIFloatingMenuPlugin />
-      {/* АВТОСОХРАНЕНИЕ И ЗАГРУЗКА СТРАНИЦ */}
-      <PageSyncPlugin pageId={pageId} />
 
-      {/* СЛЭШ-МЕНЮ */}
+      <PageSyncPlugin pageId={pageId} />
       <SlashMenuPlugin openMwsModal={() => setIsMwsModalOpen(true)} />
 
-      {/* ЛОГИКА ВСТАВКИ И МОДАЛКА */}
       <EditorModalLogic
         isMwsModalOpen={isMwsModalOpen}
         setIsMwsModalOpen={setIsMwsModalOpen}

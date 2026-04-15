@@ -106,6 +106,16 @@ export const api = {
         report_type: reportType,
       }),
     }),
+
+  explainDiff: (pageId, versionFrom = null, versionTo = null) =>
+    request("/ai/explain-diff/", {
+      method: "POST",
+      body: JSON.stringify({
+        page_id: pageId,
+        ...(versionFrom && { version_id_from: versionFrom }),
+        ...(versionTo && { version_id_to: versionTo }),
+      }),
+    }),
   checkTaskStatus: (taskId) => request(`/ai/tasks/${taskId}/`),
 
   // === 5. СОХРАНЕНИЕ СТРАНИЦЫ (AutoSave) ===

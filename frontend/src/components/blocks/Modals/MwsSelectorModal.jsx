@@ -18,18 +18,23 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
   const [isSpacesLoading, setIsSpacesLoading] = useState(false);
   const [isTablesLoading, setIsTablesLoading] = useState(false);
 
-  // === ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР ===
+  // === АБСОЛЮТНО ПУЛЕНЕПРОБИВАЕМЫЙ ЭКСТРАКТОР ===
   const extractArray = (data) => {
     if (!data) return [];
     if (Array.isArray(data)) return data;
-    if (Array.isArray(data.results)) return data.results;
-    if (Array.isArray(data.data)) return data.data;
-    if (Array.isArray(data.spaces)) return data.spaces;
-    if (Array.isArray(data.nodes)) return data.nodes;
+
     if (typeof data === "object") {
-      return data.results || data.data || data.spaces || data.nodes || [];
+      if (Array.isArray(data.results)) return data.results;
+      if (Array.isArray(data.data)) return data.data;
+      if (Array.isArray(data.spaces)) return data.spaces;
+      if (Array.isArray(data.nodes)) return data.nodes;
+
+      // Экстремальная защита: ищем ЛЮБОЙ массив внутри ключей объекта
+      const foundArray = Object.values(data).find((val) => Array.isArray(val));
+      if (foundArray) return foundArray;
     }
-    return [];
+
+    return []; // Если массива точно нет, возвращаем пустой массив
   };
 
   // 1. Загружаем пространства MWS
@@ -41,14 +46,14 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       try {
         const response = await api.getMwsSpaces();
         const spacesData = extractArray(response);
-        setSpaces(spacesData || []); // Страховка
+        setSpaces(spacesData);
 
-        if (spacesData && spacesData.length > 0 && !selectedSpaceId) {
+        if (spacesData.length > 0 && !selectedSpaceId) {
           setSelectedSpaceId(spacesData[0].id);
         }
       } catch (error) {
         console.error("Ошибка загрузки пространств MWS:", error);
-        setSpaces([]); // Сброс при ошибке
+        setSpaces([]);
       } finally {
         setIsSpacesLoading(false);
       }
@@ -66,10 +71,10 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
       try {
         const response = await api.getMwsNodes(selectedSpaceId);
         const tablesData = extractArray(response);
-        setTables(tablesData || []); // Страховка
+        setTables(tablesData);
       } catch (error) {
         console.error("Ошибка загрузки таблиц MWS:", error);
-        setTables([]); // Сброс при ошибке
+        setTables([]);
       } finally {
         setIsTablesLoading(false);
       }
@@ -78,20 +83,25 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
     fetchTables();
   }, [selectedSpaceId, isOpen]);
 
-  // Фильтрация таблиц
+  // Фильтрация таблиц (с гарантией массива)
   const filteredTables = useMemo(() => {
-    if (!Array.isArray(tables)) return [];
-    return tables.filter((table) =>
+    const safeTables = Array.isArray(tables) ? tables : [];
+    return safeTables.filter((table) =>
       table?.name?.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [tables, searchQuery]);
+
+  // Гарантируем массивы для рендера
+  const safeSpaces = Array.isArray(spaces) ? spaces : [];
+  const safeFilteredTables = Array.isArray(filteredTables)
+    ? filteredTables
+    : [];
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[200] bg-[#19191C]/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
@@ -102,7 +112,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                 Импорт из MWS Таблиц
               </h3>
               <p className="text-xs text-gray-500 font-medium">
-                Выберите таблицу для вставки в документ
+                Выберите таблицу для вставки
               </p>
             </div>
           </div>
@@ -114,7 +124,6 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 flex overflow-hidden bg-gray-50/30">
           {/* Левая колонка: Пространства */}
           <div className="w-1/3 border-r border-gray-100 bg-white overflow-y-auto p-4 space-y-1">
@@ -126,12 +135,12 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="animate-spin text-gray-400" size={20} />
               </div>
-            ) : !spaces || spaces.length === 0 ? (
+            ) : safeSpaces.length === 0 ? (
               <p className="text-sm text-gray-500 px-2">
                 Нет доступных пространств
               </p>
             ) : (
-              (spaces || []).map((space) => (
+              safeSpaces.map((space) => (
                 <button
                   key={space.id}
                   onClick={() => setSelectedSpaceId(space.id)}
@@ -149,7 +158,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                         : "text-gray-400"
                     }
                   />
-                  <span className="truncate">{space.name}</span>
+                  <span className="truncate">{space.name || "Без имени"}</span>
                 </button>
               ))
             )}
@@ -166,8 +175,8 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск по названию таблицы..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-300 focus:ring-1 focus:ring-indigo-300 transition-all shadow-sm"
+                placeholder="Поиск по названию..."
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-indigo-300 shadow-sm"
               />
             </div>
 
@@ -178,7 +187,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                   Синхронизация с MWS...
                 </span>
               </div>
-            ) : !filteredTables || filteredTables.length === 0 ? (
+            ) : safeFilteredTables.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 text-gray-400 text-center">
                 <TableIcon size={32} className="mb-3 opacity-20" />
                 <span className="text-sm">
@@ -189,11 +198,11 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
-                {(filteredTables || []).map((table) => (
+                {safeFilteredTables.map((table) => (
                   <button
                     key={table.id}
                     onClick={() => {
-                      onSelectTable(table.id, table.name);
+                      onSelectTable(table.id, table.name || "Таблица");
                       onClose();
                     }}
                     className="flex flex-col items-start gap-3 p-4 bg-white border border-gray-200 rounded-xl hover:border-indigo-500 hover:shadow-md transition-all text-left group"
@@ -203,7 +212,7 @@ export function MwsSelectorModal({ isOpen, onClose, onSelectTable }) {
                     </div>
                     <div className="w-full">
                       <h4 className="text-sm font-bold text-gray-900 truncate w-full mb-1">
-                        {table.name}
+                        {table.name || "Без названия"}
                       </h4>
                       <p className="text-[10px] text-gray-400 font-mono truncate">
                         ID: {table.id}
