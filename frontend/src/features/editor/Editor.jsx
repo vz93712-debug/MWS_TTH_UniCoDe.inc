@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
-// === 1. НОВЫЙ ИМПОРТ КОНТЕКСТА ===
+// === 1. ИМПОРТ КОНТЕКСТА СОВМЕСТНОЙ РАБОТЫ ===
 import { CollaborationContext } from "@lexical/react/LexicalCollaborationContext";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -17,11 +17,14 @@ import { LinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { ClickableLinkPlugin } from "@lexical/react/LexicalClickableLinkPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 
+// ИМПОРТЫ ДЛЯ СТАНДАРТНЫХ ТАБЛИЦ
+import { TableNode, TableCellNode, TableRowNode } from "@lexical/table";
+import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
+
 import { editorTheme } from "./theme";
 import { MwsTableNode } from "./nodes/MwsTableNode";
 import { ImageNode } from "./nodes/ImageNode";
 import { MwsSelectorModal } from "../../components/blocks/Modals/MwsSelectorModal";
-
 import { DragDropImagePlugin } from "./plugins/DragDropImagePlugin";
 import {
   SlashMenuPlugin,
@@ -47,6 +50,10 @@ const editorConfig = {
     AutoLinkNode,
     MwsTableNode,
     ImageNode,
+    // === ВОЗВРАЩАЕМ УЗЛЫ ДЛЯ РУЧНЫХ ТАБЛИЦ ===
+    TableNode,
+    TableCellNode,
+    TableRowNode,
   ],
   onError(error) {
     console.error("Lexical Error:", error);
@@ -70,7 +77,7 @@ function EditorModalLogic({ isMwsModalOpen, setIsMwsModalOpen }) {
 
 // === 2. СОЗДАЕМ ГЛОБАЛЬНУЮ КАРТУ ДЛЯ СОКЕТОВ ===
 const yjsDocMap = new Map();
-// Добавь это ПЕРЕД export default function Editor(...) { ... }
+// Добавляем генерацию случайного цвета и имени для мультиплеера
 const CURSOR_COLORS = ["#FF0032", "#00B4D8", "#00CC66", "#FFB703", "#9D4EDD"];
 const myColor = CURSOR_COLORS[Math.floor(Math.random() * CURSOR_COLORS.length)];
 const myName = "User " + Math.floor(Math.random() * 100);
@@ -84,8 +91,8 @@ export default function Editor({ pageId = "demo-page-123" }) {
       value={{
         isCollabActive: true,
         yjsDocMap: yjsDocMap,
-        name: myName, // Теперь у каждого будет "User 42", "User 87" и т.д.
-        color: myColor, // И свой уникальный цвет!
+        name: myName, // У каждого будет случайное имя "User 42", "User 87" и т.д.
+        color: myColor, // И свой уникальный цвет курсора
       }}
     >
       <LexicalComposer initialConfig={editorConfig}>
@@ -113,12 +120,16 @@ export default function Editor({ pageId = "demo-page-123" }) {
           </div>
         </div>
 
-        {/* Наш починенный Yjs Collaboration */}
+        {/* Наш Yjs Collaboration провайдер */}
         <YjsProvider documentId={pageId} />
 
         <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
         <ListPlugin />
         <CheckListPlugin />
+
+        {/* === ПЛАГИН ДЛЯ РУЧНЫХ ТАБЛИЦ === */}
+        <TablePlugin />
+
         <LinkPlugin />
         <ClickableLinkPlugin />
 
