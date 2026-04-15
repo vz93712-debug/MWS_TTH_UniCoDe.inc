@@ -2,7 +2,7 @@ import { CollaborationPlugin } from "@lexical/react/LexicalCollaborationPlugin";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
 
-export function YjsProvider({ documentId = "hackathon-demo-room" }) {
+export function YjsProvider({ documentId }) {
   return (
     <CollaborationPlugin
       id={documentId}
@@ -10,20 +10,22 @@ export function YjsProvider({ documentId = "hackathon-demo-room" }) {
         const doc = new Y.Doc();
         yjsDocMap.set(id, doc);
 
-        // 1. Достаем наш токен
+        // 1. Достаем токен
         const token = localStorage.getItem("access_token") || "";
 
-        // 2. Формируем URL. Уточни у бэкендера роут, обычно это так:
-        const wsUrl = `ws://127.0.0.1:8000/ws/pages/${id}/?token=${token}`;
+        // 2. Логика от бэкендера: y-websocket склеивает URL и roomName
+        // Замени IP/порт на боевой, если будете деплоить на сервер!
+        const serverUrl = "ws://127.0.0.1:8000/ws/pages";
+        const roomName = `${id}/?token=${token}`;
 
-        // 3. Подключаемся к серверу
-        const provider = new WebsocketProvider(wsUrl, id, doc, {
+        // 3. Подключаемся
+        const provider = new WebsocketProvider(serverUrl, roomName, doc, {
           connect: true,
         });
 
-        // Логируем статус для удобного дебага на защите
+        // Логи для отладки
         provider.on("status", (event) => {
-          console.log(`[WebSockets] Статус (${id}):`, event.status);
+          console.log(`[WebSockets] Статус соединения (${id}):`, event.status);
         });
 
         return provider;
