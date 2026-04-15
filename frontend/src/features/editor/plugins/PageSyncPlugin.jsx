@@ -6,9 +6,9 @@ export function PageSyncPlugin({ pageId }) {
   const [editor] = useLexicalComposerContext();
   const [isLoaded, setIsLoaded] = useState(false);
   const saveTimerRef = useRef(null);
-  const isFirstUpdate = useRef(true); // Чтобы не сохранять при первоначальной загрузке
+  const isFirstUpdate = useRef(true);
 
-  // 1. ЗАГРУЗКА ДАННЫХ ПРИ СМЕНЕ СТРАНИЦЫ
+  // 1. ЗАГРУЗКА ДАННЫХ (ОТКЛЮЧЕНО ДЛЯ СОВМЕСТИМОСТИ С YJS)
   useEffect(() => {
     if (!pageId) return;
 
@@ -20,18 +20,15 @@ export function PageSyncPlugin({ pageId }) {
         const pageData = await api.getPage(pageId);
 
         if (isMounted && pageData.content) {
-          // Если бэк вернул контент, парсим его в Lexical
-          const initialEditorState = editor.parseEditorState(pageData.content);
-          editor.setEditorState(initialEditorState);
-        } else if (isMounted) {
-          // Если контента нет, очищаем редактор
-          editor.update(() => {
-            const root = editor.getRoot();
-            root.clear();
-          });
+          console.log(
+            "Страница найдена, но загрузка передана Yjs (WebSockets)",
+          );
+          // ВАЖНО: Закомментировали, чтобы избежать ошибки `splice: could not find collab element node`
+          // const initialEditorState = editor.parseEditorState(pageData.content);
+          // editor.setEditorState(initialEditorState);
         }
       } catch (error) {
-        console.error("Ошибка загрузки страницы:", error);
+        console.error("Ошибка проверки страницы:", error);
       } finally {
         if (isMounted) {
           setIsLoaded(true);
@@ -47,23 +44,20 @@ export function PageSyncPlugin({ pageId }) {
     };
   }, [pageId, editor]);
 
-  // 2. АВТОСОХРАНЕНИЕ ПРИ ИЗМЕНЕНИИ
+  // 2. АВТОСОХРАНЕНИЕ ПРИ ИЗМЕНЕНИИ (ОСТАВЛЯЕМ РАБОТАТЬ)
   useEffect(() => {
     if (!isLoaded || !pageId) return;
 
     return editor.registerUpdateListener(
       ({ editorState, dirtyElements, dirtyLeaves }) => {
-        // Игнорируем обновления, если ничего не изменилось или это первый рендер после загрузки
         if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
         if (isFirstUpdate.current) {
           isFirstUpdate.current = false;
           return;
         }
 
-        // Сбрасываем таймер, если пользователь продолжает печатать
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
-        // Ждем 1 секунду тишины и сохраняем
         saveTimerRef.current = setTimeout(async () => {
           try {
             const jsonState = editorState.toJSON();
