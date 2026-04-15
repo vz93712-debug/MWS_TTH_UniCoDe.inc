@@ -1,0 +1,173 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: wikilive_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-wiki}
+      POSTGRES_USER: ${DB_USER:-mws}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mws19_uni06._inc}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mws} -d ${DB_NAME:-wiki}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wikilive_network
+
+  # Redis Cache & Broker
+  redis:
+    image: redis:7-alpine
+    container_name: wikilive_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wikilive_network
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wikilive_backend
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-j&fd-7+ll658a9q0i52v6s+j5$#drv59_k+e)&p*#=jrj+7@$$z}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - DB_NAME=${DB_NAME:-wiki}
+      - DB_USER=${DB_USER:-mws}
+      - DB_PASSWORD=${DB_PASSWORD:-mws19_uni06._inc}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - MWS_GPT_API_KEY=${MWS_GPT_API_KEY:-sk-L6aEhbIZJ1TSbxammZ7a0w}
+      - MWS_GPT_BASE_URL=${MWS_GPT_BASE_URL:-https://api.gpt.mws.ru/v1/}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB_CACHE=${REDIS_DB_CACHE:-1}
+      - REDIS_DB_CELERY=${REDIS_DB_CELERY:-2}
+      - REDIS_URL_CACHE=redis://redis:6379/${REDIS_DB_CACHE:-1}
+      - REDIS_URL_CELERY=redis://redis:6379/${REDIS_DB_CELERY:-2}
+    volumes:
+      - ./backend:/app
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wikilive_network
+
+  # Celery Worker
+  celery:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wikilive_celery
+    command: celery -A wikilive worker --loglevel=info --pool=solo
+    environment:
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-j&fd-7+ll658a9q0i52v6s+j5$#drv59_k+e)&p*#=jrj+7@$$z}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - DB_NAME=${DB_NAME:-wiki}
+      - DB_USER=${DB_USER:-mws}
+      - DB_PASSWORD=${DB_PASSWORD:-mws19_uni06._inc}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - MWS_GPT_API_KEY=${MWS_GPT_API_KEY:-sk-L6aEhbIZJ1TSbxammZ7a0w}
+      - MWS_GPT_BASE_URL=${MWS_GPT_BASE_URL:-https://api.gpt.mws.ru/v1/}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB_CACHE=${REDIS_DB_CACHE:-1}
+      - REDIS_DB_CELERY=${REDIS_DB_CELERY:-2}
+      - REDIS_URL_CACHE=redis://redis:6379/${REDIS_DB_CACHE:-1}
+      - REDIS_URL_CELERY=redis://redis:6379/${REDIS_DB_CELERY:-2}
+    volumes:
+      - ./backend:/app
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wikilive_network
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wikilive_celery_beat
+    command: celery -A wikilive beat --loglevel=info --schedule=/var/lib/celery/celerybeat-schedule
+    environment:
+      - DEBUG=${DEBUG:-True}
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-j&fd-7+ll658a9q0i52v6s+j5$#drv59_k+e)&p*#=jrj+7@$$z}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - DB_NAME=${DB_NAME:-wiki}
+      - DB_USER=${DB_USER:-mws}
+      - DB_PASSWORD=${DB_PASSWORD:-mws19_uni06._inc}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - MWS_GPT_API_KEY=${MWS_GPT_API_KEY:-sk-L6aEhbIZJ1TSbxammZ7a0w}
+      - MWS_GPT_BASE_URL=${MWS_GPT_BASE_URL:-https://api.gpt.mws.ru/v1/}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB_CACHE=${REDIS_DB_CACHE:-1}
+      - REDIS_DB_CELERY=${REDIS_DB_CELERY:-2}
+      - REDIS_URL_CACHE=redis://redis:6379/${REDIS_DB_CACHE:-1}
+      - REDIS_URL_CELERY=redis://redis:6379/${REDIS_DB_CELERY:-2}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - wikilive_network
+
+  # React Frontend (Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wikilive_frontend
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - wikilive_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  wikilive_network:
+    driver: bridge
